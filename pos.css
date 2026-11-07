@@ -398,7 +398,8 @@ body {
 }
 
 .pos-step button:hover {
-  border-color: var(--text);
+  border-color: #cf171d;
+  color: #cf171d;
 }
 
 .pos-step button:active {

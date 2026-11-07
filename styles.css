@@ -252,7 +252,7 @@ body {
   color: var(--muted);
 }
 
-/* Botón Agregar y Stepper con fuente más grande */
+/* Botón Agregar y Stepper con rojo oficial #cf171d */
 .btn-add {
   width: 100%;
   height: 46px;
@@ -264,24 +264,27 @@ body {
   font-size: 0.96rem;
   font-weight: 700;
   cursor: pointer;
+  transition: all 0.15s ease;
 }
 
-.btn-add:hover {
-  background-color: var(--text);
-  border-color: var(--text);
-  color: var(--bg);
+.btn-add:hover,
+.btn-add:active {
+  background-color: #cf171d;
+  border-color: #cf171d;
+  color: #FFFFFF;
 }
 
 .stepper {
   width: 100%;
   height: 46px;
   border-radius: 12px;
-  background-color: var(--text);
-  color: var(--bg);
+  background-color: #cf171d;
+  color: #FFFFFF;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 0.35rem;
+  box-shadow: 0 4px 12px rgba(207, 23, 29, 0.22);
 }
 
 .step-btn {
@@ -290,15 +293,28 @@ body {
   border: none;
   border-radius: 8px;
   background: transparent;
-  color: var(--bg);
+  color: #FFFFFF;
   font-size: 1.25rem;
   font-weight: 700;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.12s;
+}
+
+.step-btn:hover {
+  background-color: rgba(255, 255, 255, 0.18);
+}
+
+.step-btn:active {
+  background-color: rgba(0, 0, 0, 0.2);
 }
 
 .step-qty {
-  font-size: 1.02rem;
+  font-size: 1.05rem;
   font-weight: 800;
+  color: #FFFFFF;
 }
 
 /* LEY DE FITTS: Único CTA Principal en la Zona del Pulgar */
@@ -705,4 +721,12 @@ dialog::backdrop {
 
 .promo-add-btn:hover {
   background: #02361b;
+}
+
+.promo-add-btn.in-cart {
+  background: #cf171d;
+}
+
+.promo-add-btn.in-cart:hover {
+  background: #b51319;
 }

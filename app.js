@@ -195,7 +195,7 @@ function renderPromosBanner() {
               <span class="promo-price-current">${formatCOP(c.price)}</span>
               <span class="promo-price-original">${formatCOP(orig)}</span>
             </div>
-            <button type="button" class="promo-add-btn" data-step-id="${escapeHTML(c.id)}" data-delta="1">
+            <button type="button" class="promo-add-btn ${qty > 0 ? 'in-cart' : ''}" data-step-id="${escapeHTML(c.id)}" data-delta="1">
               ${qty > 0 ? `+ Sumar (${qty})` : '+ Agregar'}
             </button>
           </div>
