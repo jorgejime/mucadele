@@ -555,6 +555,9 @@ function renderServerLoginPage(redirectTo = '/admin.html', errorMsg = '', custom
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Acceso Administrativo · Mucadele Licores</title>
   <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="/assets/favicon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -678,9 +681,13 @@ function renderServerLoginPage(redirectTo = '/admin.html', errorMsg = '', custom
 </head>
 <body>
   <main class="login-card">
-    <span class="badge">ACCESO RESTRINGIDO</span>
-    <h1>Mucadele Licores</h1>
-    <p class="sub">Consola privada de Administración y Punto de Venta (POS).</p>
+    <div style="text-align:center;margin-bottom:1.25rem;">
+      <img src="/assets/logo-mucadele-transparente.png" alt="Mücadele Licores" style="height:56px;width:auto;object-fit:contain;margin-bottom:0.75rem;display:inline-block;">
+      <br>
+      <span class="badge">ACCESO RESTRINGIDO</span>
+      <h1 style="font-size:1.35rem;margin:0.25rem 0 0.25rem 0;">Mucadele Licores</h1>
+      <p class="sub" style="margin:0;">Consola privada de Administración y Punto de Venta (POS).</p>
+    </div>
     ${errorMsg ? `<div class="error-banner" role="alert">${escapeHtml(errorMsg)}</div>` : ''}
     <form method="POST" action="/api/login">
       <input type="hidden" name="redirect" value="${escapeHtml(sanitizeRedirectPath(redirectTo, '/admin.html'))}">

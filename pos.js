@@ -1057,6 +1057,8 @@ function showReceiptModal(sale) {
   receiptContent.innerHTML = `
     <div style="font-family:monospace;font-size:0.92rem;line-height:1.45;border:1px dashed var(--border);padding:1rem;border-radius:12px;">
       <div style="text-align:center;margin-bottom:0.75rem;">
+        <img src="/assets/logo-mucadele.png" alt="Mucadele Licores" style="height:44px;width:auto;object-fit:contain;margin-bottom:6px;display:inline-block;">
+        <br>
         <strong style="font-size:1.1rem;">MUCADELE LICORES</strong><br>
         Calle 11 # 24-36, Santa Marta<br>
         Tel: +57 301 515 3867<br>

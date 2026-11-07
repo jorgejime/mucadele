@@ -60,6 +60,23 @@ body {
   flex-wrap: wrap;
 }
 
+.pos-logo,
+.admin-logo {
+  height: 38px;
+  width: auto;
+  max-width: 120px;
+  object-fit: contain;
+  display: block;
+}
+
+@media (max-width: 640px) {
+  .pos-logo,
+  .admin-logo {
+    height: 32px;
+    max-width: 95px;
+  }
+}
+
 .pos-badge {
   background-color: var(--text);
   color: var(--bg);
