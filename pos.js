@@ -1276,7 +1276,7 @@ async function loadOrdersAndKPIs() {
             <div style="border:1px solid var(--border);border-radius:12px;padding:0.85rem;display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;">
               <div>
                 <span style="font-size:0.78rem;font-weight:800;padding:0.2rem 0.5rem;border-radius:6px;background:${
-                  isPickupOrCounter ? '#E5E5EA' : '#00A844'
+                  isPickupOrCounter ? '#E5E5EA' : '#034d27'
                 };color:${isPickupOrCounter ? '#111' : '#FFF'};">
                   ${isPickupOrCounter ? 'MOSTRADOR / LOCAL' : 'DOMICILIO'}
                 </span>

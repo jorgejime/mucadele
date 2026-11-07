@@ -4,8 +4,8 @@
   --border: #E5E5EA;
   --text: #111111;
   --muted: #52525B;
-  --action: #00A844;
-  --action-active: #008A38;
+  --action: #034d27;
+  --action-active: #02361b;
   --warning: #D97706;
   --danger: #D92D20;
   --font: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -709,7 +709,7 @@ dialog::backdrop {
   justify-content: center;
   gap: 0.4rem;
   touch-action: manipulation;
-  box-shadow: 0 4px 14px rgba(0, 168, 68, 0.3);
+  box-shadow: 0 4px 14px rgba(3, 77, 39, 0.3);
 }
 
 .pos-dock-btn:active {
@@ -1405,8 +1405,8 @@ table.admin-table th {
   min-height: 44px;
   padding: 0 1rem;
   border-radius: 11px;
-  border: 1.5px dashed #00A844;
-  background-color: rgba(0, 168, 68, 0.05);
+  border: 1.5px dashed #034d27;
+  background-color: rgba(3, 77, 39, 0.05);
   color: var(--action);
   font-family: var(--font);
   font-size: 0.9rem;
@@ -1421,8 +1421,8 @@ table.admin-table th {
 }
 
 .pos-new-tab-btn:hover {
-  background-color: rgba(0, 168, 68, 0.12);
-  border-color: #008A38;
+  background-color: rgba(3, 77, 39, 0.12);
+  border-color: #02361b;
 }
 
 /* ==========================================================================
@@ -1567,7 +1567,7 @@ table.admin-table th {
 
 .pay-method-card.active {
   border-color: var(--action);
-  background-color: rgba(0, 168, 68, 0.06);
+  background-color: rgba(3, 77, 39, 0.06);
   box-shadow: 0 0 0 2px var(--action);
 }
 

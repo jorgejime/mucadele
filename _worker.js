@@ -568,7 +568,8 @@ function renderServerLoginPage(redirectTo = '/admin.html', errorMsg = '', custom
       --border: #E5E5EA;
       --text: #111111;
       --muted: #52525B;
-      --action: #00A844;
+      --action: #034d27;
+      --action-active: #02361b;
       --font: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     }
     * { box-sizing: border-box; }
