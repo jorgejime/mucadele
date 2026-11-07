@@ -86,17 +86,22 @@ body {
 }
 
 .brand-logo {
-  height: 48px;
+  height: 52px;
   width: auto;
-  max-width: 140px;
+  max-width: 175px;
   object-fit: contain;
   display: block;
+  transition: transform 0.15s ease;
+}
+
+.brand-link:hover .brand-logo {
+  transform: scale(1.02);
 }
 
 @media (max-width: 640px) {
   .brand-logo {
-    height: 38px;
-    max-width: 110px;
+    height: 42px;
+    max-width: 140px;
   }
 }
 

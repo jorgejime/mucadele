@@ -681,12 +681,11 @@ function renderServerLoginPage(redirectTo = '/admin.html', errorMsg = '', custom
 </head>
 <body>
   <main class="login-card">
-    <div style="text-align:center;margin-bottom:1.25rem;">
-      <img src="/assets/logo-mucadele-transparente.png" alt="Mücadele Licores" style="height:56px;width:auto;object-fit:contain;margin-bottom:0.75rem;display:inline-block;">
+    <div style="text-align:center;margin-bottom:1.5rem;">
+      <img src="/assets/logo-mucadele-transparente.png" alt="Mücadele Licores" style="height:62px;width:auto;object-fit:contain;margin-bottom:0.75rem;display:inline-block;">
       <br>
       <span class="badge">ACCESO RESTRINGIDO</span>
-      <h1 style="font-size:1.35rem;margin:0.25rem 0 0.25rem 0;">Mucadele Licores</h1>
-      <p class="sub" style="margin:0;">Consola privada de Administración y Punto de Venta (POS).</p>
+      <p class="sub" style="margin:0.5rem 0 0 0;">Consola de Administración y Punto de Venta (POS)</p>
     </div>
     ${errorMsg ? `<div class="error-banner" role="alert">${escapeHtml(errorMsg)}</div>` : ''}
     <form method="POST" action="/api/login">
