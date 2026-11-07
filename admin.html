@@ -8,7 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/pos.css?v=20261107v2">
+  <link rel="stylesheet" href="/pos.css?v=20261107v3">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 <body>
 
@@ -92,9 +93,14 @@
             <option value="otros">Tequila, Vodka, Hielo y Pasantes</option>
           </select>
         </div>
-        <button type="button" id="open-new-product-btn" class="pos-charge-btn btn-create-prod">
-          + Crear Nuevo Producto
-        </button>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+          <button type="button" id="open-invoice-scanner-btn" class="pos-charge-btn" style="background:#00A844;border-color:#00A844;height:42px;">
+            📸 Llenar Inventario con Factura IA
+          </button>
+          <button type="button" id="open-new-product-btn" class="pos-charge-btn btn-create-prod" style="height:42px;">
+            + Crear Nuevo Producto
+          </button>
+        </div>
       </div>
 
       <div class="admin-table-wrap">
@@ -116,6 +122,100 @@
 
     <!-- SECCIÓN 2: PROVEEDORES Y REABASTECIMIENTO PROGRAMADO -->
     <section id="tab-suppliers" class="admin-card" hidden>
+      <!-- MODULO DESTACADO: SUBIDA DE FACTURAS CON INTELIGENCIA ARTIFICIAL -->
+      <div class="admin-panel-callout" id="ai-invoice-section" style="background:#F0FDF4;border:1.5px solid #86EFAC;margin-bottom:1.5rem;border-radius:16px;">
+        <div class="admin-section-header">
+          <div>
+            <h2 class="admin-section-title" style="color:#166534;display:flex;align-items:center;gap:0.5rem;">
+              <span>🤖 📸</span> Cargar Factura de Compra con IA (PDF o Foto)
+            </h2>
+            <p class="admin-section-desc" style="color:#15803D;">
+              Sube la factura física (foto con el celular) o archivo PDF de tu distribuidor (Bavaria, Diageo, Dislicores, etc.). La Inteligencia Artificial extraerá automáticamente productos, cantidades y costos, cotejará con el catálogo y llenará el inventario real en Cloudflare D1.
+            </p>
+          </div>
+        </div>
+
+        <!-- Zona de Carga / Drag & Drop -->
+        <div id="invoice-dropzone" style="border:2px dashed #4ADE80;background:#FFFFFF;border-radius:14px;padding:2.2rem 1.5rem;text-align:center;cursor:pointer;transition:all 0.15s ease;">
+          <input type="file" id="invoice-file-input" accept="image/*,application/pdf" capture="environment" hidden>
+          <div style="font-size:2.8rem;margin-bottom:0.4rem;">📄 📸</div>
+          <h3 style="margin:0 0 0.35rem 0;font-size:1.15rem;font-weight:800;color:var(--text);">
+            Toca aquí para tomar foto de la factura o subir archivo PDF
+          </h3>
+          <p style="margin:0 0 1rem 0;font-size:0.88rem;color:var(--muted);">
+            Soporta PDF multipágina y fotos de facturas en papel (.jpg, .jpeg, .png, .webp)
+          </p>
+          <button type="button" class="btn-primary" style="height:44px;padding:0 1.5rem;font-weight:700;display:inline-flex;align-items:center;gap:0.4rem;pointer-events:none;background:#00A844;border-color:#00A844;">
+            📁 Seleccionar o Fotografiar Factura
+          </button>
+        </div>
+
+        <!-- Previsualizador y Estado de Lectura IA -->
+        <div id="invoice-scan-status-box" hidden style="margin-top:1rem;background:#FFFFFF;border:1px solid var(--border);border-radius:12px;padding:1.25rem;">
+          <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+            <div id="invoice-preview-thumb-wrap" style="width:70px;height:70px;border-radius:8px;background:var(--surface);border:1px solid var(--border);overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <span id="invoice-preview-placeholder" style="font-size:1.8rem;">📄</span>
+              <img id="invoice-preview-img" style="width:100%;height:100%;object-fit:cover;" hidden>
+            </div>
+            <div style="flex:1;min-width:200px;">
+              <div style="font-weight:800;font-size:1.05rem;" id="invoice-file-name-display">factura_distribuidor.pdf</div>
+              <div style="font-size:0.85rem;color:var(--muted);" id="invoice-file-size-display">Preparando documento...</div>
+              <div id="ai-scan-progress-msg" style="font-size:0.9rem;font-weight:700;color:var(--action);margin-top:0.35rem;display:flex;align-items:center;gap:0.4rem;">
+                <span>⏳</span>
+                <span>Analizando factura con Inteligencia Artificial...</span>
+              </div>
+            </div>
+            <button type="button" id="cancel-invoice-scan-btn" class="btn-outline" style="height:38px;">✕ Cancelar</button>
+          </div>
+        </div>
+
+        <!-- Contenedor de Resultados Extraídos y Cotejo de Inventario -->
+        <div id="invoice-results-box" hidden style="margin-top:1.25rem;background:#FFFFFF;border:1px solid var(--border);border-radius:14px;padding:1.25rem;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;border-bottom:1px solid var(--border);padding-bottom:1rem;margin-bottom:1rem;">
+            <div>
+              <span style="font-size:0.75rem;font-weight:800;text-transform:uppercase;color:var(--muted);letter-spacing:0.04em;">Factura Analizada por IA</span>
+              <h3 style="margin:0.2rem 0;font-size:1.25rem;font-weight:800;" id="scanned-supplier-name">DIAGEO COLOMBIA</h3>
+              <div style="font-size:0.88rem;color:var(--muted);display:flex;gap:0.8rem;flex-wrap:wrap;">
+                <span>Factura: <strong id="scanned-invoice-num">#FE-1234</strong></span>
+                <span>Fecha: <strong id="scanned-invoice-date">2026-11-05</strong></span>
+                <span>Total Facturado: <strong id="scanned-invoice-total">$0</strong></span>
+              </div>
+            </div>
+            <div style="text-align:right;">
+              <span style="font-size:0.8rem;color:var(--muted);display:block;">Total unidades a ingresar:</span>
+              <strong id="scanned-total-units-badge" style="font-size:1.6rem;font-weight:800;color:var(--action);">+0 uds</strong>
+            </div>
+          </div>
+
+          <!-- Tabla de Productos a Ingresar -->
+          <div style="overflow-x:auto;">
+            <table class="admin-table" style="width:100%;border-collapse:collapse;font-size:0.9rem;">
+              <thead>
+                <tr style="background:var(--surface);text-align:left;">
+                  <th style="padding:0.6rem;width:40px;text-align:center;">✓</th>
+                  <th style="padding:0.6rem;">Ítem Leído en Factura</th>
+                  <th style="padding:0.6rem;">Producto Mapeado en Catálogo</th>
+                  <th style="padding:0.6rem;text-align:center;width:120px;">Cant. que Entra</th>
+                  <th style="padding:0.6rem;text-align:right;">Costo Unit.</th>
+                  <th style="padding:0.6rem;text-align:center;">Stock: Actual → Nuevo</th>
+                </tr>
+              </thead>
+              <tbody id="scanned-items-tbody"></tbody>
+            </table>
+          </div>
+
+          <!-- Botones de Acción -->
+          <div style="display:flex;gap:0.75rem;margin-top:1.25rem;flex-wrap:wrap;justify-content:flex-end;">
+            <button type="button" id="discard-invoice-btn" class="btn-outline" style="height:46px;padding:0 1.25rem;">
+              Descartar
+            </button>
+            <button type="button" id="apply-invoice-to-d1-btn" class="btn-primary" style="height:46px;padding:0 1.75rem;font-weight:800;background:var(--action);border-color:var(--action);display:inline-flex;align-items:center;gap:0.4rem;font-size:0.95rem;">
+              📥 Confirmar e Ingresar a Inventario Real (Cloudflare D1)
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Panel Superior: Reabastecimiento Automático por Stock Mínimo -->
       <div class="admin-panel-callout">
         <div class="admin-section-header">

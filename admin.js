@@ -1174,3 +1174,480 @@ async function loadAllAdminData() {
 }
 
 loadAllAdminData();
+
+/* ==========================================================================
+   ESCÁNER INTELIGENTE DE FACTURAS CON IA (PDF Y FOTO) -> INVENTARIO D1
+   ========================================================================== */
+
+let currentScannedData = null;
+let currentInvoiceBase64 = null;
+let currentInvoiceMime = null;
+
+function initInvoiceScanner() {
+  const toggleBtn = document.getElementById('toggle-invoice-scanner-btn');
+  const closeBtn = document.getElementById('close-invoice-scanner-btn');
+  const scannerSection = document.getElementById('invoice-scanner-section');
+  const fileInput = document.getElementById('invoice-file-input');
+  const dropzone = document.getElementById('invoice-dropzone');
+  const cameraBtn = document.getElementById('scan-camera-btn');
+  const pdfBtn = document.getElementById('scan-pdf-btn');
+  const processBtn = document.getElementById('btn-process-invoice-ai');
+  const applyBtn = document.getElementById('btn-apply-invoice-stock');
+  const cancelBtn = document.getElementById('btn-cancel-invoice-results');
+
+  if (!scannerSection) return;
+
+  toggleBtn?.addEventListener('click', () => {
+    scannerSection.classList.toggle('hidden');
+    if (!scannerSection.classList.contains('hidden')) {
+      scannerSection.scrollIntoView({ behavior: 'smooth' });
+    }
+  });
+
+  closeBtn?.addEventListener('click', () => {
+    scannerSection.classList.add('hidden');
+  });
+
+  cameraBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (fileInput) {
+      fileInput.accept = 'image/*';
+      fileInput.capture = 'environment';
+      fileInput.click();
+    }
+  });
+
+  pdfBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (fileInput) {
+      fileInput.accept = '.pdf,application/pdf';
+      fileInput.removeAttribute('capture');
+      fileInput.click();
+    }
+  });
+
+  dropzone?.addEventListener('click', () => {
+    if (fileInput) {
+      fileInput.accept = '.pdf,image/png,image/jpeg,image/webp';
+      fileInput.removeAttribute('capture');
+      fileInput.click();
+    }
+  });
+
+  dropzone?.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropzone.classList.add('border-brand-primary', 'bg-brand-primary/5');
+  });
+
+  dropzone?.addEventListener('dragleave', () => {
+    dropzone.classList.remove('border-brand-primary', 'bg-brand-primary/5');
+  });
+
+  dropzone?.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropzone.classList.remove('border-brand-primary', 'bg-brand-primary/5');
+    if (e.dataTransfer?.files?.length) {
+      handleInvoiceFile(e.dataTransfer.files[0]);
+    }
+  });
+
+  fileInput?.addEventListener('change', () => {
+    if (fileInput.files?.length) {
+      handleInvoiceFile(fileInput.files[0]);
+    }
+  });
+
+  processBtn?.addEventListener('click', processInvoiceWithAI);
+  applyBtn?.addEventListener('click', applyScannedInvoiceToDatabase);
+  cancelBtn?.addEventListener('click', resetInvoiceScanner);
+}
+
+async function handleInvoiceFile(file) {
+  if (!file) return;
+
+  const previewContainer = document.getElementById('invoice-preview-container');
+  const previewImg = document.getElementById('invoice-preview-img');
+  const fileInfo = document.getElementById('invoice-file-info');
+  const processBtn = document.getElementById('btn-process-invoice-ai');
+  const resultsContainer = document.getElementById('invoice-results-container');
+
+  resultsContainer?.classList.add('hidden');
+  if (processBtn) processBtn.disabled = true;
+
+  fileInfo.textContent = `Cargando archivo: ${file.name} (${(file.size / 1024).toFixed(1)} KB)...`;
+
+  try {
+    if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+      fileInfo.textContent = `Renderizando PDF: ${file.name} (${(file.size / 1024).toFixed(1)} KB)...`;
+      const base64Data = await convertPdfToImageBase64(file);
+      currentInvoiceBase64 = base64Data;
+      currentInvoiceMime = 'image/jpeg';
+      previewImg.src = `data:image/jpeg;base64,${base64Data}`;
+      previewContainer.classList.remove('hidden');
+      fileInfo.textContent = `✓ PDF listo: ${file.name} (Página digitalizada en alta resolución)`;
+      if (processBtn) processBtn.disabled = false;
+    } else if (file.type.startsWith('image/')) {
+      fileInfo.textContent = `Optimizando imagen: ${file.name}...`;
+      const base64Data = await optimizeImageFile(file);
+      currentInvoiceBase64 = base64Data;
+      currentInvoiceMime = 'image/jpeg';
+      previewImg.src = `data:image/jpeg;base64,${base64Data}`;
+      previewContainer.classList.remove('hidden');
+      fileInfo.textContent = `✓ Imagen lista: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+      if (processBtn) processBtn.disabled = false;
+    } else {
+      alert('Formato de archivo no compatible. Por favor suba una foto (.jpg, .png) o un PDF de la factura.');
+      fileInfo.textContent = 'Formato no soportado.';
+    }
+  } catch (err) {
+    console.error('Error procesando archivo:', err);
+    alert('Error al procesar el archivo: ' + err.message);
+    fileInfo.textContent = 'Error al cargar el archivo.';
+  }
+}
+
+async function convertPdfToImageBase64(file) {
+  if (!window.pdfjsLib) {
+    throw new Error('La librería PDF.js no está disponible en este momento.');
+  }
+
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const page = await pdf.getPage(1);
+
+  const viewport = page.getViewport({ scale: 2.0 });
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+
+  await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
+  return dataUrl.split(',')[1];
+}
+
+async function optimizeImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 1600;
+        let w = img.width;
+        let h = img.height;
+
+        if (w > maxDim || h > maxDim) {
+          if (w > h) {
+            h = Math.round((h * maxDim) / w);
+            w = maxDim;
+          } else {
+            w = Math.round((w * maxDim) / h);
+            h = maxDim;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        resolve(dataUrl.split(',')[1]);
+      };
+      img.onerror = () => reject(new Error('No se pudo cargar la imagen.'));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error('Error al leer el archivo.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function processInvoiceWithAI() {
+  if (!currentInvoiceBase64) {
+    alert('Primero seleccione o capture una factura en foto o PDF.');
+    return;
+  }
+
+  const processBtn = document.getElementById('btn-process-invoice-ai');
+  const loading = document.getElementById('invoice-scanner-loading');
+  const resultsContainer = document.getElementById('invoice-results-container');
+
+  if (processBtn) processBtn.disabled = true;
+  loading?.classList.remove('hidden');
+  resultsContainer?.classList.add('hidden');
+
+  try {
+    const token = localStorage.getItem('mucadele_admin_token') || sessionStorage.getItem('mucadele_admin_token');
+    const resp = await fetch('/api/admin/scan-invoice', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        imageBase64: currentInvoiceBase64,
+        mimeType: currentInvoiceMime || 'image/jpeg',
+      }),
+    });
+
+    const data = await resp.json();
+    if (!resp.ok || !data.ok) {
+      throw new Error(data.error || 'Error al procesar la factura con IA.');
+    }
+
+    currentScannedData = data.data;
+    renderScannedResults(data.data);
+    resultsContainer?.classList.remove('hidden');
+    resultsContainer?.scrollIntoView({ behavior: 'smooth' });
+  } catch (err) {
+    console.error('Error en escaneo con IA:', err);
+    alert('Error al leer la factura con IA: ' + err.message);
+  } finally {
+    loading?.classList.add('hidden');
+    if (processBtn) processBtn.disabled = false;
+  }
+}
+
+function renderScannedResults(data) {
+  const suppInput = document.getElementById('scanned-supplier-name');
+  const invNumberInput = document.getElementById('scanned-invoice-number');
+  const invDateInput = document.getElementById('scanned-invoice-date');
+  const invTotalInput = document.getElementById('scanned-invoice-total');
+
+  if (suppInput) suppInput.value = data.supplier_name || '';
+  if (invNumberInput) invNumberInput.value = data.invoice_number || '';
+  if (invDateInput) invDateInput.value = data.invoice_date || new Date().toISOString().split('T')[0];
+  if (invTotalInput) invTotalInput.value = data.invoice_total ? Number(data.invoice_total).toLocaleString('es-CO') : '0';
+
+  const tbody = document.getElementById('scanned-items-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  const items = Array.isArray(data.items) ? data.items : [];
+  if (items.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-gray-500">No se detectaron ítems en la factura. Puede agregarlos manualmente o intentar con una foto más nítida.</td></tr>`;
+    return;
+  }
+
+  items.forEach((item, index) => {
+    const tr = document.createElement('tr');
+    tr.className = 'border-b border-border/50 hover:bg-surface-elevated/40 text-xs transition-colors';
+    tr.dataset.index = index;
+
+    const matchedProd = products.find((p) => p.id === item.product_id);
+    const currentStock = matchedProd ? Number(matchedProd.stock || 0) : Number(item.current_stock || 0);
+    const addedQty = Number(item.quantity || 0);
+    const newStock = currentStock + addedQty;
+
+    tr.innerHTML = `
+      <td class="p-2.5 font-medium text-text-primary">
+        <div class="font-semibold text-white">${escapeHtml(item.raw_name || 'Ítem')}</div>
+        <div class="text-[10px] text-gray-400">Extraído de factura</div>
+      </td>
+      <td class="p-2.5">
+        <select class="item-product-select w-full bg-surface-elevated border border-border rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-brand-primary" data-index="${index}">
+          <option value="">-- No vincular a catálogo --</option>
+          ${products
+            .map(
+              (p) => `
+            <option value="${p.id}" ${p.id === item.product_id ? 'selected' : ''}>
+              ${p.name} (Stock: ${p.stock || 0})
+            </option>
+          `
+            )
+            .join('')}
+        </select>
+      </td>
+      <td class="p-2.5">
+        <input type="number" min="0" step="1" class="item-qty-input w-20 bg-surface-elevated border border-border rounded px-2 py-1 text-xs text-center font-bold text-brand-primary focus:outline-none focus:border-brand-primary" value="${addedQty}" data-index="${index}">
+      </td>
+      <td class="p-2.5">
+        <input type="number" min="0" step="100" class="item-cost-input w-24 bg-surface-elevated border border-border rounded px-2 py-1 text-xs text-right text-white focus:outline-none focus:border-brand-primary" value="${item.unit_cost || 0}" data-index="${index}">
+      </td>
+      <td class="p-2.5 text-center font-mono font-medium text-gray-300 item-current-stock">${currentStock}</td>
+      <td class="p-2.5 text-center font-mono font-bold text-green-400 bg-green-500/10 rounded item-new-stock">${newStock}</td>
+      <td class="p-2.5 text-center">
+        <button type="button" class="btn-remove-scanned-item text-red-400 hover:text-red-300 p-1" data-index="${index}" title="Quitar ítem">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+        </button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  attachScannedTableEvents();
+}
+
+function attachScannedTableEvents() {
+  const tbody = document.getElementById('scanned-items-tbody');
+  if (!tbody) return;
+
+  tbody.querySelectorAll('.item-product-select').forEach((sel) => {
+    sel.addEventListener('change', (e) => {
+      const idx = parseInt(e.target.dataset.index, 10);
+      const prodId = e.target.value;
+      const prod = products.find((p) => p.id === prodId);
+      if (currentScannedData && currentScannedData.items[idx]) {
+        currentScannedData.items[idx].product_id = prodId || null;
+        currentScannedData.items[idx].product_name = prod ? prod.name : null;
+      }
+      updateRowStockCalculation(idx);
+    });
+  });
+
+  tbody.querySelectorAll('.item-qty-input').forEach((inp) => {
+    inp.addEventListener('input', (e) => {
+      const idx = parseInt(e.target.dataset.index, 10);
+      const qty = parseInt(e.target.value, 10) || 0;
+      if (currentScannedData && currentScannedData.items[idx]) {
+        currentScannedData.items[idx].quantity = qty;
+      }
+      updateRowStockCalculation(idx);
+    });
+  });
+
+  tbody.querySelectorAll('.item-cost-input').forEach((inp) => {
+    inp.addEventListener('input', (e) => {
+      const idx = parseInt(e.target.dataset.index, 10);
+      const cost = parseFloat(e.target.value) || 0;
+      if (currentScannedData && currentScannedData.items[idx]) {
+        currentScannedData.items[idx].unit_cost = cost;
+      }
+    });
+  });
+
+  tbody.querySelectorAll('.btn-remove-scanned-item').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      const idx = parseInt(btn.dataset.index, 10);
+      if (currentScannedData && Array.isArray(currentScannedData.items)) {
+        currentScannedData.items.splice(idx, 1);
+        renderScannedResults(currentScannedData);
+      }
+    });
+  });
+}
+
+function updateRowStockCalculation(idx) {
+  const tr = document.querySelector(`#scanned-items-tbody tr[data-index="${idx}"]`);
+  if (!tr) return;
+
+  const sel = tr.querySelector('.item-product-select');
+  const qtyInput = tr.querySelector('.item-qty-input');
+  const currentStockEl = tr.querySelector('.item-current-stock');
+  const newStockEl = tr.querySelector('.item-new-stock');
+
+  const prodId = sel.value;
+  const prod = products.find((p) => p.id === prodId);
+  const currentStock = prod ? Number(prod.stock || 0) : 0;
+  const qty = parseInt(qtyInput.value, 10) || 0;
+  const newStock = currentStock + qty;
+
+  currentStockEl.textContent = currentStock;
+  newStockEl.textContent = newStock;
+}
+
+async function applyScannedInvoiceToDatabase() {
+  if (!currentScannedData || !Array.isArray(currentScannedData.items)) {
+    alert('No hay datos de factura para aplicar.');
+    return;
+  }
+
+  const supplierName = document.getElementById('scanned-supplier-name')?.value.trim() || 'Distribuidor';
+  const invoiceNumber = document.getElementById('scanned-invoice-number')?.value.trim() || `FAC-${Date.now().toString().slice(-6)}`;
+  const invoiceDate = document.getElementById('scanned-invoice-date')?.value || new Date().toISOString().split('T')[0];
+
+  const validItems = currentScannedData.items.filter((item) => item.product_id && Number(item.quantity) > 0);
+
+  if (validItems.length === 0) {
+    alert('No hay ítems vinculados a productos del catálogo con cantidad mayor a 0. Asocie al menos un producto.');
+    return;
+  }
+
+  const confirmed = confirm(
+    `¿Confirmar ingreso de mercancía?\n\n` +
+      `Proveedor: ${supplierName}\n` +
+      `Factura: ${invoiceNumber}\n` +
+      `Ítems a ingresar: ${validItems.length}\n` +
+      `Total unidades: ${validItems.reduce((acc, it) => acc + Number(it.quantity), 0)}\n\n` +
+      `El inventario en Cloudflare D1 se actualizará de inmediato.`
+  );
+
+  if (!confirmed) return;
+
+  const applyBtn = document.getElementById('btn-apply-invoice-stock');
+  if (applyBtn) {
+    applyBtn.disabled = true;
+    applyBtn.textContent = 'Actualizando D1 en vivo...';
+  }
+
+  try {
+    const token = localStorage.getItem('mucadele_admin_token') || sessionStorage.getItem('mucadele_admin_token');
+    const resp = await fetch('/api/admin/apply-invoice', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        supplier_name: supplierName,
+        invoice_number: invoiceNumber,
+        invoice_date: invoiceDate,
+        items: validItems,
+      }),
+    });
+
+    const res = await resp.json();
+    if (!resp.ok || !res.ok) {
+      throw new Error(res.error || 'Error al aplicar el inventario.');
+    }
+
+    alert(`✓ Inventario actualizado exitosamente en Cloudflare D1.\n` +
+          `Factura registrada: ${res.po_number || invoiceNumber}\n` +
+          `Productos actualizados: ${res.updated_products_count}\n` +
+          `Total unidades sumadas: ${res.total_units_added}`);
+
+    resetInvoiceScanner();
+    document.getElementById('invoice-scanner-section')?.classList.add('hidden');
+    await loadProducts();
+    await loadSuppliersAndPOs();
+  } catch (err) {
+    console.error('Error aplicando factura:', err);
+    alert('Error al aplicar factura al inventario: ' + err.message);
+  } finally {
+    if (applyBtn) {
+      applyBtn.disabled = false;
+      applyBtn.textContent = '✓ Confirmar e Ingresar al Inventario Real';
+    }
+  }
+}
+
+function resetInvoiceScanner() {
+  currentScannedData = null;
+  currentInvoiceBase64 = null;
+  currentInvoiceMime = null;
+
+  const fileInput = document.getElementById('invoice-file-input');
+  if (fileInput) fileInput.value = '';
+
+  const previewContainer = document.getElementById('invoice-preview-container');
+  if (previewContainer) previewContainer.classList.add('hidden');
+
+  const fileInfo = document.getElementById('invoice-file-info');
+  if (fileInfo) fileInfo.textContent = '';
+
+  const resultsContainer = document.getElementById('invoice-results-container');
+  if (resultsContainer) resultsContainer.classList.add('hidden');
+
+  const processBtn = document.getElementById('btn-process-invoice-ai');
+  if (processBtn) processBtn.disabled = true;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  initInvoiceScanner();
+});
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+  initInvoiceScanner();
+}
+

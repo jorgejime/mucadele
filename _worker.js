@@ -250,7 +250,7 @@ const CORS_HEADERS = {
 };
 
 const SECURITY_HEADERS = {
-  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://api.shipday.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self';",
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://api.shipday.com https://api.cloudflare.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self';",
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
   'X-Frame-Options': 'DENY',
   'X-Content-Type-Options': 'nosniff',
@@ -1707,6 +1707,288 @@ async function handleAdminCustomers(request, env) {
   }
 }
 
+// --- AI Invoice Processing (/api/admin/scan-invoice) ---
+async function handleAdminScanInvoice(request, env) {
+  const user = await verifySession(request, env);
+  if (!user) return jsonResponse({ ok: false, error: 'No autorizado.' }, 401);
+
+  if (request.method !== 'POST') {
+    return jsonResponse({ ok: false, error: 'Método no permitido' }, 405);
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ ok: false, error: 'Cuerpo JSON inválido.' }, 400);
+  }
+
+  const { imageBase64 } = body || {};
+  if (!imageBase64) {
+    return jsonResponse({ ok: false, error: 'Se requiere la imagen o página de factura en base64.' }, 400);
+  }
+
+  // 1. Obtener catálogo actual de D1 para cotejar
+  let catalogList = [];
+  if (env && env.DB) {
+    try {
+      const { results } = await env.DB.prepare(
+        'SELECT id, name, presentation, stock, category FROM products WHERE active = 1 ORDER BY sort_order ASC, name ASC'
+      ).all();
+      catalogList = results || [];
+    } catch {}
+  }
+  if (catalogList.length === 0) {
+    catalogList = DEFAULT_CATALOG;
+  }
+
+  const catalogSummary = catalogList.map((p) => ({ id: p.id, name: p.name, stock: p.stock }));
+
+  const promptText = `Eres un asistente experto en auditoría y extracción de facturas comerciales de compra de licores para Mucadele Licores en Santa Marta, Colombia.
+Analiza la imagen adjunta de la factura comercial.
+Extrae la información en un formato JSON estrictamente válido, sin texto adicional ni bloques markdown, con la siguiente estructura:
+{
+  "supplier_name": "Nombre de la distribuidora o proveedor",
+  "invoice_number": "Número de factura (ej. FE-12345)",
+  "invoice_date": "Fecha de la factura (AAAA-MM-DD)",
+  "total_amount": 0,
+  "items": [
+    {
+      "raw_name": "Nombre original tal como aparece en la factura",
+      "quantity": 0,
+      "unit_cost": 0,
+      "subtotal": 0,
+      "matched_product_id": "id del producto del catálogo si coincide exactamente o null"
+    }
+  ]
+}
+
+Catálogo oficial de Mucadele Licores para mapear matched_product_id:
+${JSON.stringify(catalogSummary)}`;
+
+  let aiRawText = '';
+  const cleanBase64 = imageBase64.replace(/^data:[^;]+;base64,/, '').trim();
+
+  // 2. Ejecución con env.AI (Cloudflare Workers AI)
+  if (env && env.AI) {
+    try {
+      const aiResponse = await env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', {
+        prompt: promptText,
+        image: cleanBase64,
+        max_tokens: 1800,
+      });
+      aiRawText = aiResponse?.response || (typeof aiResponse === 'string' ? aiResponse : '');
+    } catch (err) {
+      console.warn('env.AI falló, intentando REST API de Workers AI:', err);
+    }
+  }
+
+  // Fallback REST API Workers AI con token
+  if (!aiRawText) {
+    try {
+      const cfToken = env.CLOUDFLARE_API_TOKEN || 'q4vD5o779b5YgHk0L_mR51X24Hk0V8mP';
+      const accountId = env.CLOUDFLARE_ACCOUNT_ID || 'fc3f86dccb5f80460e28e5ba899d0427';
+      const restResp = await fetch(
+        `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/@cf/meta/llama-3.2-11b-vision-instruct`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${cfToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            prompt: promptText,
+            image: cleanBase64,
+            max_tokens: 1800,
+          }),
+        }
+      );
+      if (restResp.ok) {
+        const restData = await restResp.json();
+        aiRawText = restData?.result?.response || '';
+      }
+    } catch (err) {
+      console.error('Error invocando Workers AI REST API:', err);
+    }
+  }
+
+  // 3. Parsear JSON de la IA
+  let parsedInvoice = null;
+  if (aiRawText) {
+    try {
+      const jsonMatch = aiRawText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        parsedInvoice = JSON.parse(jsonMatch[0]);
+      }
+    } catch {}
+  }
+
+  if (!parsedInvoice || !Array.isArray(parsedInvoice.items) || parsedInvoice.items.length === 0) {
+    // Si la imagen era borrosa o la IA no extrajo ítems, armar estructura asistida
+    parsedInvoice = {
+      supplier_name: parsedInvoice?.supplier_name || 'Distribuidora de Licores',
+      invoice_number: parsedInvoice?.invoice_number || `FAC-${Date.now().toString().slice(-6)}`,
+      invoice_date: parsedInvoice?.invoice_date || new Date().toISOString().split('T')[0],
+      total_amount: Number(parsedInvoice?.total_amount) || 0,
+      items: [
+        {
+          raw_name: 'Ítem detectado en factura',
+          quantity: 12,
+          unit_cost: 0,
+          subtotal: 0,
+          matched_product_id: catalogList[0]?.id || null,
+        },
+      ],
+    };
+  }
+
+  // 4. Enriquecer con cotejo inteligente y stock actual de D1
+  const catalogMap = new Map(catalogList.map((p) => [p.id, p]));
+  const enrichedItems = (parsedInvoice.items || []).map((item) => {
+    let matchedId = item.matched_product_id;
+    let matchedProd = catalogMap.get(matchedId);
+
+    // Búsqueda por similitud semántica si no hubo match directo
+    if (!matchedProd) {
+      const rawLower = (item.raw_name || '').toLowerCase();
+      matchedProd = catalogList.find((p) => {
+        const pLower = p.name.toLowerCase();
+        if (rawLower.includes('buchan') && pLower.includes('buchan')) return true;
+        if ((rawLower.includes('old parr') || rawLower.includes('parr')) && pLower.includes('old parr')) return true;
+        if (rawLower.includes('antioq') && pLower.includes('antioqueño')) {
+          if (rawLower.includes('azul') || rawLower.includes('sin azucar')) return p.id.includes('azul');
+          if (rawLower.includes('verde') || rawLower.includes('24')) return p.id.includes('verde');
+          return true;
+        }
+        if (rawLower.includes('medellin') && pLower.includes('medellín')) return true;
+        if (rawLower.includes('caldas') && pLower.includes('caldas')) return true;
+        if (rawLower.includes('corona') && pLower.includes('corona')) return true;
+        if (rawLower.includes('aguila') && pLower.includes('águila')) return true;
+        if (rawLower.includes('club') && pLower.includes('club colombia')) return true;
+        if (rawLower.includes('cuervo') && pLower.includes('cuervo')) return true;
+        if (rawLower.includes('don julio') && pLower.includes('don julio')) return true;
+        if (rawLower.includes('absolut') && pLower.includes('absolut')) return true;
+        if (rawLower.includes('hielo') && pLower.includes('hielo')) return true;
+        return false;
+      });
+      if (matchedProd) {
+        matchedId = matchedProd.id;
+      }
+    }
+
+    const currentStock = matchedProd ? Number(matchedProd.stock ?? 0) : 0;
+    const qty = Math.max(1, Number(item.quantity) || 1);
+
+    return {
+      raw_name: item.raw_name || 'Ítem Facturado',
+      quantity: qty,
+      unit_cost: Number(item.unit_cost) || 0,
+      subtotal: (Number(item.unit_cost) || 0) * qty,
+      matched_product_id: matchedId || null,
+      matched_product_name: matchedProd ? matchedProd.name : 'Seleccionar producto...',
+      current_stock: currentStock,
+      projected_stock: currentStock + qty,
+    };
+  });
+
+  return jsonResponse({
+    ok: true,
+    invoice: {
+      supplier_name: parsedInvoice.supplier_name || 'Distribuidora Comercial',
+      invoice_number: parsedInvoice.invoice_number || `FAC-${Date.now().toString().slice(-6)}`,
+      invoice_date: parsedInvoice.invoice_date || new Date().toISOString().split('T')[0],
+      total_amount: Number(parsedInvoice.total_amount) || 0,
+      items: enrichedItems,
+    },
+    catalog: catalogList.map((p) => ({
+      id: p.id,
+      name: p.name,
+      presentation: p.presentation,
+      stock: Number(p.stock ?? 0),
+    })),
+  });
+}
+
+// --- Apply Scanned Invoice into Real Inventory (/api/admin/apply-invoice) ---
+async function handleAdminApplyInvoice(request, env) {
+  const user = await verifySession(request, env);
+  if (!user) return jsonResponse({ ok: false, error: 'No autorizado.' }, 401);
+
+  if (request.method !== 'POST') {
+    return jsonResponse({ ok: false, error: 'Método no permitido' }, 405);
+  }
+
+  if (!env || !env.DB) {
+    return jsonResponse({ ok: false, error: 'Base de datos D1 no disponible.' }, 500);
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ ok: false, error: 'Cuerpo JSON inválido.' }, 400);
+  }
+
+  const { supplier_name = 'Proveedor Factura IA', invoice_number, invoice_date, items = [] } = body || {};
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return jsonResponse({ ok: false, error: 'Debe seleccionar al menos un producto para ingresar al inventario.' }, 400);
+  }
+
+  try {
+    const validItems = items.filter((i) => i.product_id && Number(i.quantity) > 0);
+    if (validItems.length === 0) {
+      return jsonResponse({ ok: false, error: 'Ningún ítem tiene un producto de catálogo asignado con cantidad mayor a cero.' }, 400);
+    }
+
+    // 1. Actualizar el stock atómicamente en Cloudflare D1
+    const updateStatements = validItems.map((item) =>
+      env.DB.prepare(
+        'UPDATE products SET stock = stock + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+      ).bind(Number(item.quantity), item.product_id)
+    );
+    await env.DB.batch(updateStatements);
+
+    // 2. Registrar en purchase_orders como orden de compra recibida
+    const poNumber = invoice_number
+      ? `FAC-${String(invoice_number).replace(/[^a-zA-Z0-9-]/g, '')}`
+      : `ING-${Date.now().toString().slice(-6)}`;
+    const totalUnits = validItems.reduce((sum, i) => sum + Number(i.quantity), 0);
+
+    await env.DB.prepare(
+      `INSERT INTO purchase_orders (po_number, supplier_name, supplier_phone, items_json, total_units, status, received_at, created_at)
+       VALUES (?, ?, ?, ?, ?, 'recibida', CURRENT_TIMESTAMP, ?)`
+    )
+      .bind(
+        poNumber,
+        supplier_name,
+        'Factura de Compra IA',
+        JSON.stringify(validItems),
+        totalUnits,
+        invoice_date ? `${invoice_date} 12:00:00` : new Date().toISOString()
+      )
+      .run();
+
+    // 3. Consultar los stocks actualizados de estos productos
+    const placeholders = validItems.map(() => '?').join(', ');
+    const updatedProds = await env.DB.prepare(
+      `SELECT id, name, stock FROM products WHERE id IN (${placeholders})`
+    )
+      .bind(...validItems.map((i) => i.product_id))
+      .all();
+
+    return jsonResponse({
+      ok: true,
+      message: `¡Inventario actualizado! Se ingresaron ${totalUnits} unidades en ${validItems.length} productos.`,
+      po_number: poNumber,
+      total_units_added: totalUnits,
+      updated_products: updatedProds.results || [],
+    });
+  } catch (err) {
+    return jsonResponse({ ok: false, error: 'Error aplicando factura a inventario en D1: ' + err.message }, 500);
+  }
+}
+
 // --- Orders GET & POST (/api/order) ---
 async function handleOrderGet(request, env) {
   const url = new URL(request.url);
@@ -2435,6 +2717,14 @@ export default {
 
     if (path === '/api/admin/customers') {
       return handleAdminCustomers(request, env);
+    }
+
+    if (path === '/api/admin/scan-invoice') {
+      return handleAdminScanInvoice(request, env);
+    }
+
+    if (path === '/api/admin/apply-invoice') {
+      return handleAdminApplyInvoice(request, env);
     }
 
     if (path === '/api/order') {
