@@ -2,7 +2,21 @@ const SHIPDAY_API_URL = 'https://api.shipday.com';
 const FALLBACK_CARRIER_ID = 565174;
 
 const ADMIN_USER = 'superadmin';
+const CASHIER_USER = 'cajero';
+const DEFAULT_CASHIER_PASS = 'Mucadele2026Caja';
 const COOKIE_NAME = 'mucadele_session';
+
+function isAdminUser(user) {
+  if (!user) return false;
+  if (typeof user === 'string') return user !== 'cajero' && user !== CASHIER_USER;
+  return user.role === 'admin' || user.username === 'superadmin';
+}
+
+function isCashierUser(user) {
+  if (!user) return false;
+  if (typeof user === 'string') return user === 'cajero' || user === CASHIER_USER;
+  return user.role === 'cajero' || user.username === 'cajero';
+}
 
 const STORE_CONFIG = {
   name: 'mucadele licores',
@@ -446,11 +460,11 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;');
 }
 
-// --- Firma y Verificación HMAC-SHA256 ---
-async function signToken(username, env) {
+// --- Firma y Verificación HMAC-SHA256 con Roles ---
+async function signToken(username, role = 'admin', env) {
   const secret = (env && env.TOKEN_SECRET) || '';
   const exp = Date.now() + 7 * 24 * 60 * 60 * 1000;
-  const payload = `${username}:${exp}`;
+  const payload = `${username}:${role}:${exp}`;
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
     'raw',
@@ -472,11 +486,24 @@ async function verifyRawToken(token, env) {
   if (!secret) return null;
   try {
     const decoded = atob(token);
-    const [username, expStr, sigHex] = decoded.split(':');
+    const parts = decoded.split(':');
+    let username, role, expStr, sigHex, payload;
+    if (parts.length === 3) {
+      // Legacy format: username:exp:sigHex
+      [username, expStr, sigHex] = parts;
+      role = (username === 'cajero' || username === CASHIER_USER) ? 'cajero' : 'admin';
+      payload = `${username}:${expStr}`;
+    } else if (parts.length === 4) {
+      // Role format: username:role:exp:sigHex
+      [username, role, expStr, sigHex] = parts;
+      payload = `${username}:${role}:${expStr}`;
+    } else {
+      return null;
+    }
+
     if (!username || !expStr || !sigHex) return null;
     if (Date.now() > Number(expStr)) return null;
 
-    const payload = `${username}:${expStr}`;
     const enc = new TextEncoder();
     const key = await crypto.subtle.importKey(
       'raw',
@@ -513,7 +540,7 @@ async function verifyRawToken(token, env) {
       isMatch = diff === 0;
     }
     if (!isMatch) return null;
-    return username;
+    return { username, role: role || (username === 'cajero' ? 'cajero' : 'admin') };
   } catch {
     return null;
   }
@@ -800,30 +827,46 @@ async function handleServerLogin(request, env) {
   }
 
   const safeRedirect = sanitizeRedirectPath(redirectTo, '/admin.html');
-  const expectedUser = (env && env.ADMIN_USER) || ADMIN_USER;
-  const expectedPass = (env && env.ADMIN_PASS) || '';
+  const expectedAdminUser = (env && env.ADMIN_USER) || ADMIN_USER;
+  const expectedAdminPass = (env && env.ADMIN_PASS) || '';
+  const expectedCashierUser = (env && env.CASHIER_USER) || CASHIER_USER;
+  const expectedCashierPass = (env && env.CASHIER_PASS) || DEFAULT_CASHIER_PASS;
 
-  const isUserMatch = username === expectedUser;
-  const isPassMatch = expectedPass ? await timingSafeEqualString(password, expectedPass) : false;
+  let authUser = null;
+  let authRole = null;
 
-  if (isUserMatch && isPassMatch) {
+  if (username === expectedAdminUser && expectedAdminPass && (await timingSafeEqualString(password, expectedAdminPass))) {
+    authUser = expectedAdminUser;
+    authRole = 'admin';
+  } else if (username === expectedCashierUser && (await timingSafeEqualString(password, expectedCashierPass))) {
+    authUser = expectedCashierUser;
+    authRole = 'cajero';
+  }
+
+  if (authUser && authRole) {
     await resetLoginRateLimit(clientIp, env);
-    const token = await signToken(expectedUser, env);
+    const token = await signToken(authUser, authRole, env);
+    let targetRedirect = safeRedirect;
+    if (authRole === 'cajero') {
+      if (targetRedirect.includes('admin') || targetRedirect === '/' || !targetRedirect) {
+        targetRedirect = '/pos.html';
+      }
+    }
     const cookieStr = `${COOKIE_NAME}=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=604800`;
     if (isJsonRequest || request.headers.get('Accept')?.includes('application/json')) {
       return jsonResponse(
-        { ok: true, user: expectedUser, token, redirect: safeRedirect },
+        { ok: true, user: authUser, role: authRole, token, redirect: targetRedirect },
         200,
         {
           'Set-Cookie': cookieStr,
-          Location: safeRedirect,
+          Location: targetRedirect,
         }
       );
     }
     return new Response(null, {
       status: 303,
       headers: {
-        Location: safeRedirect,
+        Location: targetRedirect,
         'Set-Cookie': cookieStr,
         'Cache-Control': 'no-store',
       },
@@ -863,7 +906,9 @@ async function handleAuth(request, env) {
   if (request.method === 'GET') {
     const user = await verifySession(request, env);
     if (!user) return jsonResponse({ ok: false, error: 'Sesión no válida o expirada' }, 401);
-    return jsonResponse({ ok: true, user });
+    const username = typeof user === 'string' ? user : user.username;
+    const role = typeof user === 'string' ? (user === 'cajero' ? 'cajero' : 'admin') : (user.role || 'admin');
+    return jsonResponse({ ok: true, user: username, role });
   }
 
   if (request.method === 'POST') {
@@ -878,18 +923,28 @@ async function handleAuth(request, env) {
     const username = String(body.username || '').trim();
     const password = String(body.password || '').trim();
 
-    const expectedUser = (env && env.ADMIN_USER) || ADMIN_USER;
-    const expectedPass = (env && env.ADMIN_PASS) || '';
+    const expectedAdminUser = (env && env.ADMIN_USER) || ADMIN_USER;
+    const expectedAdminPass = (env && env.ADMIN_PASS) || '';
+    const expectedCashierUser = (env && env.CASHIER_USER) || CASHIER_USER;
+    const expectedCashierPass = (env && env.CASHIER_PASS) || DEFAULT_CASHIER_PASS;
 
-    const isUserMatch = username === expectedUser;
-    const isPassMatch = expectedPass ? await timingSafeEqualString(password, expectedPass) : false;
+    let authUser = null;
+    let authRole = null;
 
-    if (isUserMatch && isPassMatch) {
+    if (username === expectedAdminUser && expectedAdminPass && (await timingSafeEqualString(password, expectedAdminPass))) {
+      authUser = expectedAdminUser;
+      authRole = 'admin';
+    } else if (username === expectedCashierUser && (await timingSafeEqualString(password, expectedCashierPass))) {
+      authUser = expectedCashierUser;
+      authRole = 'cajero';
+    }
+
+    if (authUser && authRole) {
       await resetLoginRateLimit(clientIp, env);
-      const token = await signToken(expectedUser, env);
+      const token = await signToken(authUser, authRole, env);
       const cookieStr = `${COOKIE_NAME}=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=604800`;
       return jsonResponse(
-        { ok: true, user: expectedUser, token },
+        { ok: true, user: authUser, role: authRole, token, redirect: authRole === 'cajero' ? '/pos.html' : '/admin.html' },
         200,
         { 'Set-Cookie': cookieStr }
       );
@@ -1058,6 +1113,9 @@ async function checkAndTriggerAutoReorder(env, productIds = []) {
 async function handleAdminProducts(request, env) {
   const user = await verifySession(request, env);
   if (!user) return jsonResponse({ ok: false, error: 'No autorizado.' }, 401);
+  if (!isAdminUser(user)) {
+    return jsonResponse({ ok: false, error: 'Acceso denegado: El usuario cajero solo tiene permisos para vender y no puede manipular inventarios ni modificar precios.' }, 403);
+  }
   if (!env || !env.DB) return jsonResponse({ ok: false, error: 'Base de datos D1 no vinculada.' }, 500);
 
   const url = new URL(request.url);
@@ -1211,6 +1269,9 @@ async function handleAdminProducts(request, env) {
 async function handleAdminSuppliers(request, env) {
   const user = await verifySession(request, env);
   if (!user) return jsonResponse({ ok: false, error: 'No autorizado.' }, 401);
+  if (!isAdminUser(user)) {
+    return jsonResponse({ ok: false, error: 'Acceso denegado: Solo el administrador puede gestionar proveedores.' }, 403);
+  }
   if (!env || !env.DB) return jsonResponse({ ok: false, error: 'Base de datos D1 no vinculada.' }, 500);
 
   const url = new URL(request.url);
@@ -1297,6 +1358,9 @@ async function handleAdminSuppliers(request, env) {
 async function handleAdminPurchaseOrders(request, env) {
   const user = await verifySession(request, env);
   if (!user) return jsonResponse({ ok: false, error: 'No autorizado.' }, 401);
+  if (!isAdminUser(user)) {
+    return jsonResponse({ ok: false, error: 'Acceso denegado: Solo el administrador puede recibir y gestionar órdenes de compra.' }, 403);
+  }
   if (!env || !env.DB) return jsonResponse({ ok: false, error: 'Base de datos D1 no vinculada.' }, 500);
 
   if (request.method !== 'POST') {
@@ -1718,6 +1782,9 @@ async function handleAdminCustomers(request, env) {
 async function handleAdminScanInvoice(request, env) {
   const user = await verifySession(request, env);
   if (!user) return jsonResponse({ ok: false, error: 'No autorizado.' }, 401);
+  if (!isAdminUser(user)) {
+    return jsonResponse({ ok: false, error: 'Acceso denegado: El usuario cajero solo tiene permisos para vender y no puede procesar facturas de inventario.' }, 403);
+  }
 
   if (request.method !== 'POST') {
     return jsonResponse({ ok: false, error: 'Método no permitido' }, 405);
@@ -1920,6 +1987,9 @@ ${JSON.stringify(catalogSummary)}`;
 async function handleAdminApplyInvoice(request, env) {
   const user = await verifySession(request, env);
   if (!user) return jsonResponse({ ok: false, error: 'No autorizado.' }, 401);
+  if (!isAdminUser(user)) {
+    return jsonResponse({ ok: false, error: 'Acceso denegado: El usuario cajero solo tiene permisos para vender y no puede modificar el inventario.' }, 403);
+  }
 
   if (request.method !== 'POST') {
     return jsonResponse({ ok: false, error: 'Método no permitido' }, 405);
@@ -2751,8 +2821,21 @@ export default {
             headers: { 'Content-Type': 'application/javascript', 'Cache-Control': 'no-store' },
           });
         }
-        return renderServerLoginPage(sanitizeRedirectPath(path, '/admin.html'));
+        return renderServerLoginPage(sanitizeRedirectPath(path, '/pos.html'));
       }
+
+      // Si el rol es cajero y pretende entrar a las pantallas de administración de inventarios/precios
+      const normPath = path.toLowerCase().replace(/\/+$/, '') || '/';
+      if (!isAdminUser(user) && (normPath === '/admin' || normPath === '/admin.html' || normPath.startsWith('/admin/'))) {
+        return new Response(null, {
+          status: 303,
+          headers: {
+            Location: '/pos?denied=admin',
+            'Cache-Control': 'no-store',
+          },
+        });
+      }
+
       const assetResp = await env.ASSETS.fetch(request);
       const headers = new Headers(assetResp.headers);
       headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');

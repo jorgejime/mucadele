@@ -1664,3 +1664,46 @@ removeDiscountBtn?.addEventListener('click', () => {
   renderTabs();
   renderPOSTicket();
 });
+
+/* ==========================================================================
+   CONTROL DE ACCESO Y ROL (CAJERO VS SUPERADMIN)
+   ========================================================================== */
+async function initPOSUserRole() {
+  try {
+    const resp = await fetch('/api/auth');
+    if (resp.ok) {
+      const data = await resp.json();
+      const adminLink = document.getElementById('pos-admin-nav-link');
+      const userBadge = document.getElementById('pos-user-badge');
+      if (data.ok && data.role === 'cajero') {
+        if (adminLink) adminLink.style.display = 'none';
+        if (userBadge) {
+          userBadge.style.display = 'inline-block';
+          userBadge.textContent = '👤 CAJERO (Solo Ventas)';
+          userBadge.title = 'Rol: Cajero. Permiso exclusivo para vender y cobrar.';
+        }
+      } else if (data.ok && data.role === 'admin') {
+        if (userBadge) {
+          userBadge.style.display = 'inline-block';
+          userBadge.style.background = '#111';
+          userBadge.textContent = '👑 SUPERADMIN';
+        }
+      }
+    }
+  } catch {}
+
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('denied') === 'admin') {
+    alert(
+      '⚠️ ACCESO DENEGADO\n\n' +
+      'Tu usuario tiene rol de Cajero y está autorizado exclusivamente para vender y cobrar en el POS.\n' +
+      'La modificación de precios, inventarios y proveedores está reservada para el Administrador.'
+    );
+    window.history.replaceState({}, document.title, '/pos');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', initPOSUserRole);
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+  initPOSUserRole();
+}
