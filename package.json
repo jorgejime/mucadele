@@ -1,0 +1,15 @@
+{
+  "name": "mucadele-licores",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tienda en línea y despacho express conectado a Shipday para Mucadele Licores (Santa Marta)",
+  "type": "module",
+  "scripts": {
+    "test": "node test/e2e-security-ops.test.js",
+    "test:prod": "node test/e2e-security-ops.test.js https://mucadele.com.co",
+    "test:tier1": "node test/e2e-security-ops.test.js --tier=1",
+    "test:tier2": "node test/e2e-security-ops.test.js --tier=2",
+    "test:tier3": "node test/e2e-security-ops.test.js --tier=3",
+    "test:tier4": "node test/e2e-security-ops.test.js --tier=4"
+  }
+}

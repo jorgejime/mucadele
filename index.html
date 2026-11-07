@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="es-CO">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Mucadele Licores · Domicilio en 25 min en Santa Marta</title>
+  <meta name="description" content="Pide whisky Old Parr, Buchanan's, Aguardiente Antioqueño, ron y cervezas frías a domicilio o para recoger en local en Santa Marta. Calle 11 # 24-36.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://mucadele.com.co/">
+  <link rel="alternate" type="text/plain" href="https://mucadele.com.co/llms.txt" title="Catálogo estructurado para IA (GEO/AIO)">
+
+  <meta name="geo.region" content="CO-MAG">
+  <meta name="geo.placename" content="Santa Marta, Magdalena, Colombia">
+  <meta name="geo.position" content="11.24383;-74.186437">
+  <meta name="ICBM" content="11.24383, -74.186437">
+
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="es_CO">
+  <meta property="og:title" content="Mucadele Licores · Entrega en 25 min en Santa Marta">
+  <meta property="og:description" content="Whiskies, Aguardiente Antioqueño, Rones, Cervezas frías y Hielo a domicilio o retiro en local en Santa Marta.">
+  <meta property="og:url" content="https://mucadele.com.co/">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+
+  <!-- JSON-LD Invisible para SEO, GEO y AIO -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "LiquorStore",
+    "name": "Mucadele Licores",
+    "url": "https://mucadele.com.co/",
+    "telephone": "+573015153867",
+    "currenciesAccepted": "COP",
+    "paymentAccepted": "Cash, Nequi, Daviplata, Card",
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": "Calle 11 # 24-36, Comuna 3",
+      "addressLocality": "Santa Marta",
+      "addressRegion": "Magdalena",
+      "addressCountry": "CO"
+    },
+    "geo": {
+      "@type": "GeoCoordinates",
+      "latitude": 11.24383,
+      "longitude": -74.186437
+    }
+  }
+  </script>
+</head>
+<body>
+
+  <header class="header">
+    <div class="shell">
+      <div class="header-bar">
+        <div class="brand">
+          <h1>Mucadele Licores</h1>
+          <span>Santa Marta · 25 min</span>
+        </div>
+
+        <div class="search">
+          <input
+            type="search"
+            id="search-input"
+            placeholder="Buscar licor o cerveza..."
+            aria-label="Buscar producto"
+          >
+        </div>
+      </div>
+
+      <nav class="filters" aria-label="Categorías">
+        <button type="button" class="filter-btn" data-category="todos" aria-pressed="true">Todo</button>
+        <button type="button" class="filter-btn" data-category="combos" aria-pressed="false" style="color:#00A844;border-color:#00A844;font-weight:800;">🔥 Combos y Promos</button>
+        <button type="button" class="filter-btn" data-category="whisky" aria-pressed="false">Whisky</button>
+        <button type="button" class="filter-btn" data-category="aguardiente-ron" aria-pressed="false">Guaro y Ron</button>
+        <button type="button" class="filter-btn" data-category="cervezas" aria-pressed="false">Cervezas</button>
+        <button type="button" class="filter-btn" data-category="otros" aria-pressed="false">Tequila y Hielo</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="shell">
+    <!-- Banner de Promociones y Combos de la Semana -->
+    <section class="promos-banner-section" aria-label="Combos y promociones destacadas">
+      <div class="promos-banner-header">
+        <div class="promos-badge">⚡ COMBOS DE LA SEMANA · AHORRO DIRECTO</div>
+        <h2>Pide en combo y ahorra en Santa Marta</h2>
+        <p>Aguardiente + Agua, Ron "Mami" + Cerveza, Hielo + Vaper y más. Entrega en 25 min.</p>
+      </div>
+
+      <div class="promos-scroll-track" id="promos-banner-grid">
+        <!-- Tarjetas de combos hidratadas dinámicamente -->
+      </div>
+    </section>
+
+    <div id="product-grid" class="grid" aria-live="polite"></div>
+  </main>
+
+  <footer class="legal-footer">
+    +18 Ley 124 de 1994 · El exceso de alcohol es perjudicial para la salud · Calle 11 # 24-36, Santa Marta
+  </footer>
+
+  <!-- Único CTA Principal en la Zona del Pulgar -->
+  <div class="thumb-dock">
+    <button type="button" id="primary-thumb-cta" class="cta-primary" aria-haspopup="dialog" aria-controls="cart-dialog">
+      <span id="cta-main-text">Ver pedido (2)</span>
+      <span id="cta-price-badge">$173.000</span>
+    </button>
+  </div>
+
+  <!-- Modal Checkout Mínimo (Soporta A Domicilio y Recoger en Local sin domicilio) -->
+  <dialog id="cart-dialog" closedby="any" aria-labelledby="cart-dialog-title">
+    <div class="modal-head">
+      <h2 id="cart-dialog-title">Tu pedido</h2>
+      <button type="button" id="close-cart-btn" class="btn-close" aria-label="Cerrar">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <div id="cart-items-container" class="cart-list"></div>
+
+      <form id="checkout-form" class="form-minimal">
+        <div class="mode-switch" role="group" aria-label="Modalidad de entrega">
+          <button type="button" class="mode-btn" data-order-mode="delivery" aria-pressed="true">
+            A domicilio ($6.000)
+          </button>
+          <button type="button" class="mode-btn" data-order-mode="pickup" aria-pressed="false">
+            Recoger en local ($0)
+          </button>
+        </div>
+
+        <input
+          type="text"
+          id="customer-name"
+          name="name"
+          autocomplete="name"
+          placeholder="Nombre de quien recibe / retira"
+          aria-label="Nombre de quien recibe"
+          required
+        >
+        <input
+          type="tel"
+          id="customer-phone"
+          name="phone"
+          inputmode="tel"
+          autocomplete="tel"
+          placeholder="Celular / WhatsApp"
+          aria-label="Celular"
+          required
+        >
+
+        <div id="delivery-address-wrap">
+          <input
+            type="text"
+            id="customer-address"
+            name="address"
+            autocomplete="street-address"
+            placeholder="Dirección exacta y barrio en Santa Marta"
+            aria-label="Dirección de entrega"
+            required
+          >
+        </div>
+
+        <div id="pickup-info-wrap" class="pickup-banner" hidden>
+          <strong>Retiro en tienda (Sin costo de domicilio):</strong><br>
+          Calle 11 # 24-36, Comuna 3, Santa Marta. Listo en 5 minutos en mostrador.
+        </div>
+
+        <select id="payment-method" name="paymentMethod" aria-label="Método de pago" required>
+          <option value="cash">Pago: Efectivo</option>
+          <option value="nequi">Pago: Nequi / Daviplata</option>
+          <option value="card">Pago: Datáfono / Tarjeta</option>
+        </select>
+
+        <div class="totals">
+          <div class="totals-line">
+            <span>Productos</span>
+            <span id="summary-subtotal">$0</span>
+          </div>
+          <div class="totals-line">
+            <span id="delivery-label">Domicilio</span>
+            <span id="summary-delivery">$6.000</span>
+          </div>
+          <div class="totals-line final">
+            <span>Total</span>
+            <span id="summary-total">$0</span>
+          </div>
+        </div>
+
+        <button type="submit" id="submit-order-btn" class="cta-primary" style="max-width:100%;">
+          <span id="submit-order-label">Confirmar pedido</span>
+          <span id="pay-btn-amount">$0</span>
+        </button>
+      </form>
+    </div>
+  </dialog>
+
+  <!-- Modal Seguimiento Shipday / Código de Retiro -->
+  <dialog id="tracking-dialog" closedby="any" aria-labelledby="tracking-dialog-title">
+    <div class="modal-head">
+      <h2 id="tracking-dialog-title">Pedido confirmado</h2>
+      <button type="button" id="close-tracking-btn" class="btn-close" aria-label="Cerrar">✕</button>
+    </div>
+    <div class="modal-body" id="tracking-dialog-content"></div>
+  </dialog>
+
+  <!-- Gate +18 Mínimo -->
+  <dialog id="age-dialog" closedby="none" aria-labelledby="age-dialog-title">
+    <div class="modal-body" style="text-align:center;">
+      <h2 id="age-dialog-title" style="margin:0 0 0.4rem 0; font-size:1.15rem;">¿Tienes 18 años o más?</h2>
+      <p style="margin:0 0 1.15rem 0; font-size:0.85rem; color:var(--muted);">
+        Venta exclusiva a mayores de edad en Santa Marta (Ley 124 de 1994).
+      </p>
+      <button type="button" id="age-confirm-btn" class="cta-primary" style="max-width:100%; justify-content:center;">
+        <span>Sí, soy mayor de 18 años</span>
+      </button>
+    </div>
+  </dialog>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

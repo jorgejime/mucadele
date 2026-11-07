@@ -1,0 +1,8 @@
+name = "mucadele"
+pages_build_output_dir = "."
+compatibility_date = "2024-11-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "mucadele-db"
+database_id = "b7b4852d-94c6-4466-ad72-5c07ef6d843c"

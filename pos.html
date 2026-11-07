@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="es-CO">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Caja POS · Mucadele Licores (Calle 11 # 24-36)</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/pos.css?v=20261107v3">
+</head>
+<body>
+
+  <header class="pos-header no-print">
+    <div class="pos-brand">
+      <span class="pos-badge">POS LOCAL</span>
+      <h1>Mucadele Licores · Calle 11 # 24-36</h1>
+    </div>
+
+    <div class="pos-actions">
+      <a href="/clientes" class="btn-outline" style="border-color:var(--brand-gold);font-weight:700;">
+        👥 Clientes y Cartera
+      </a>
+      <a href="/admin" class="btn-outline btn-manual-link">
+        ⚙️ Panel Admin (Inventario / Domiciliarios)
+      </a>
+      <button type="button" id="open-orders-btn" class="btn-outline">
+        Pedidos y Arqueo (<span id="shift-count-badge">0</span>)
+      </button>
+      <a href="/manual" class="btn-outline">📖 Manual</a>
+      <a href="/" class="btn-outline">Tienda Web</a>
+      <a href="/api/logout?next=/pos" class="btn-outline" title="Cerrar sesión">Cerrar sesión</a>
+    </div>
+  </header>
+
+  <!-- Barra de Múltiples Ventas Simultáneas (Hojas de Venta en Paralelo) -->
+  <nav class="pos-tabs-strip no-print" aria-label="Hojas de venta simultáneas">
+    <div class="pos-tabs-scroll" id="pos-tabs-list"></div>
+    <button type="button" id="pos-new-tab-btn" class="pos-new-tab-btn" title="Abrir una nueva hoja de venta">
+      <span>+</span> Nueva venta
+    </button>
+  </nav>
+
+  <main class="pos-workspace no-print">
+    <!-- Selector de vista ágil para pantallas móviles y tablets (< 960px) -->
+    <nav class="pos-mobile-nav" role="tablist" aria-label="Cambiar vista en pantalla móvil">
+      <button type="button" class="pos-mobile-nav-btn active" id="pos-tab-catalog-btn" role="tab" aria-selected="true" aria-controls="pos-catalog-panel">
+        📦 Catálogo de Productos
+      </button>
+      <button type="button" class="pos-mobile-nav-btn" id="pos-tab-register-btn" role="tab" aria-selected="false" aria-controls="pos-register-aside">
+        🧾 Cuenta y Cobro (<span id="pos-mobile-ticket-count">0</span>)
+      </button>
+    </nav>
+
+    <!-- Izquierda: Catálogo Táctil de Caja -->
+    <section class="pos-catalog-panel" aria-label="Catálogo de productos">
+      <div class="pos-toolbar">
+        <input
+          type="search"
+          id="pos-search"
+          class="pos-search"
+          placeholder="Buscar licor, cerveza o hielo (clic para sumar a la cuenta)..."
+        >
+        <button type="button" id="clear-ticket-btn" class="btn-outline">Limpiar cuenta</button>
+      </div>
+
+      <div class="pos-filters">
+        <button type="button" class="pos-filter-btn" data-cat="todos" aria-pressed="true">Todo</button>
+        <button type="button" class="pos-filter-btn" data-cat="combos" aria-pressed="false" style="color:var(--action);border-color:var(--action);font-weight:800;">🔥 Combos y Promos</button>
+        <button type="button" class="pos-filter-btn" data-cat="whisky" aria-pressed="false">Whisky</button>
+        <button type="button" class="pos-filter-btn" data-cat="aguardiente-ron" aria-pressed="false">Guaro y Ron</button>
+        <button type="button" class="pos-filter-btn" data-cat="cervezas" aria-pressed="false">Cervezas</button>
+        <button type="button" class="pos-filter-btn" data-cat="otros" aria-pressed="false">Tequila y Hielo</button>
+      </div>
+
+      <div id="pos-grid" class="pos-grid"></div>
+    </section>
+
+    <!-- Derecha: Caja Registradora (Mostrador Sin Domicilio vs Despacho Domicilio) -->
+    <aside class="pos-register" id="pos-register-aside" aria-label="Caja registradora">
+      <div class="pos-back-to-catalog-wrap">
+        <button type="button" id="pos-back-to-catalog-btn" class="btn-outline pos-back-btn">
+          ← Seguir agregando productos
+        </button>
+      </div>
+
+      <div class="pos-mode-tabs" role="group" aria-label="Tipo de venta">
+        <button type="button" class="pos-mode-tab" data-sale-mode="pos_counter" aria-pressed="true">
+          Mostrador (Sin domicilio)
+        </button>
+        <button type="button" class="pos-mode-tab" data-sale-mode="delivery" aria-pressed="false">
+          Enviar a Domicilio
+        </button>
+      </div>
+
+      <div id="pos-ticket-list" class="pos-ticket-list"></div>
+
+      <form id="pos-form" class="pos-fields">
+        <input
+          type="text"
+          id="pos-customer-name"
+          placeholder="Cliente Mostrador (Opcional)"
+        >
+
+        <div id="pos-delivery-fields" class="pos-delivery-fields-box" hidden>
+          <input
+            type="tel"
+            id="pos-customer-phone"
+            inputmode="tel"
+            placeholder="Celular del cliente (Obligatorio para domicilio)"
+          >
+          <input
+            type="text"
+            id="pos-customer-address"
+            placeholder="Dirección exacta y barrio en Santa Marta"
+          >
+          <select id="pos-carrier-select" aria-label="Seleccionar domiciliario">
+            <option value="">Motorizado: Asignación Automática (Principal)</option>
+          </select>
+        </div>
+
+        <div class="pos-totals">
+          <div class="pos-totals-row">
+            <span>Subtotal</span>
+            <span id="pos-subtotal">$0</span>
+          </div>
+          <!-- Fila de Descuento en Vivo -->
+          <div class="pos-totals-row" id="pos-discount-row" hidden style="color:var(--danger);font-weight:700;">
+            <span id="pos-discount-label">Descuento aplicado</span>
+            <span id="pos-discount-amount">-$0</span>
+          </div>
+          <div class="pos-totals-row">
+            <span id="pos-delivery-label">Mostrador (Sin domicilio)</span>
+            <span id="pos-delivery-fee">$0</span>
+          </div>
+          <div class="pos-totals-row grand">
+            <span>Total a cobrar</span>
+            <span id="pos-total">$0</span>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:0.4rem;align-items:center;margin-top:0.4rem;">
+          <button type="button" id="open-discount-modal-btn" class="btn-outline" style="flex:1;height:38px;font-size:0.84rem;font-weight:700;display:inline-flex;align-items:center;justify-content:center;gap:0.35rem;border-color:var(--action);color:var(--action);">
+            🏷️ Aplicar Descuento
+          </button>
+          <button type="button" id="remove-discount-btn" class="btn-outline" title="Quitar descuento de esta venta" hidden style="height:38px;padding:0 0.75rem;color:var(--danger);border-color:var(--danger);font-weight:700;">
+            ✕ Quitar
+          </button>
+        </div>
+
+        <button type="button" id="pos-submit-btn" class="pos-charge-btn">
+          <span id="pos-submit-label">Cobrar en mostrador</span>
+          <span id="pos-submit-amount">$0</span>
+        </button>
+      </form>
+    </aside>
+  </main>
+
+  <!-- Resumen anclado inferior para cajero en móvil / tablet (< 960px) -->
+  <aside id="pos-mobile-bottom-dock" class="pos-mobile-dock no-print" aria-label="Resumen rápido de venta">
+    <div class="dock-summary">
+      <span>Total cuenta</span>
+      <strong id="pos-dock-total-amount">$0</strong>
+    </div>
+    <button type="button" id="pos-jump-to-register" class="pos-dock-btn">
+      Cobrar / Finalizar (<span id="pos-dock-item-count">0</span>) →
+    </button>
+  </aside>
+
+  <!-- Modal Pagar Factura (Exacto a la Fotografía de Referencia) -->
+  <dialog id="payment-modal" class="payment-modal no-print" closedby="any">
+    <div class="payment-modal-card">
+      <div class="payment-modal-header">
+        <h2>Pagar factura</h2>
+        <button type="button" class="payment-modal-close" id="close-payment-modal-btn" aria-label="Cerrar modal">&times;</button>
+      </div>
+
+      <div class="payment-total-banner">
+        <span class="payment-total-lbl">TOTAL</span>
+        <div class="payment-total-amount" id="pay-modal-total-display">$0</div>
+      </div>
+
+      <!-- Grid de botones principales: Fila 1 (3 items), Separador 'Otros métodos', Fila 2 (4 items) -->
+      <div class="payment-grid-section">
+        <div class="payment-methods-grid top-row">
+          <button type="button" class="pay-method-card" data-method="efectivo">
+            <div class="pay-method-icon">
+              <!-- Icono Billete Efectivo -->
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="6" width="20" height="12" rx="2"/>
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M6 12h.01M18 12h.01"/>
+              </svg>
+            </div>
+            <span class="pay-method-title">Efectivo</span>
+          </button>
+
+          <button type="button" class="pay-method-card" data-method="tarjeta_credito">
+            <div class="pay-method-icon">
+              <!-- Icono Tarjeta de Crédito -->
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="5" width="20" height="14" rx="2"/>
+                <line x1="2" y1="10" x2="22" y2="10"/>
+                <circle cx="17" cy="15" r="1.5"/>
+              </svg>
+            </div>
+            <span class="pay-method-title">Tarjeta de crédito</span>
+          </button>
+
+          <button type="button" class="pay-method-card" data-method="transferencia">
+            <div class="pay-method-icon">
+              <!-- Icono Banco Columnas Transferencia -->
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="3" y1="21" x2="21" y2="21"/>
+                <line x1="6" y1="18" x2="6" y2="11"/>
+                <line x1="10" y1="18" x2="10" y2="11"/>
+                <line x1="14" y1="18" x2="14" y2="11"/>
+                <line x1="18" y1="18" x2="18" y2="11"/>
+                <polygon points="12 2 20 7 4 7"/>
+              </svg>
+            </div>
+            <span class="pay-method-title">Transferencia</span>
+          </button>
+        </div>
+
+        <div class="payment-divider">
+          <span>Otros métodos</span>
+        </div>
+
+        <div class="payment-methods-grid bottom-row">
+          <button type="button" class="pay-method-card" data-method="combinado">
+            <div class="pay-method-icon">
+              <!-- Icono Monedas Combinado con signo $ -->
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="2" x2="12" y2="22"/>
+                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+              </svg>
+            </div>
+            <span class="pay-method-title">Combinado</span>
+          </button>
+
+          <button type="button" class="pay-method-card" data-method="tarjeta_debito">
+            <div class="pay-method-icon">
+              <!-- Icono Tarjeta Débito -->
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="5" width="20" height="14" rx="2"/>
+                <line x1="2" y1="10" x2="22" y2="10"/>
+                <rect x="5" y="14" width="4" height="3" rx="0.5"/>
+              </svg>
+            </div>
+            <span class="pay-method-title">Tarjeta débito</span>
+          </button>
+
+          <button type="button" class="pay-method-card" data-method="credito">
+            <div class="pay-method-icon">
+              <!-- Icono A CRÉDITO Flecha entrando en carpeta -->
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <path d="M12 18v-6m-3 3l3-3 3 3"/>
+              </svg>
+            </div>
+            <span class="pay-method-title">A CRÉDITO</span>
+          </button>
+
+          <button type="button" class="pay-method-card" data-method="otros">
+            <div class="pay-method-icon">
+              <!-- Icono Tuerca / Otros Métodos -->
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
+            </div>
+            <span class="pay-method-title">Otros métodos de pago</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Panel dinámico interactivo según el método activo -->
+      <div id="payment-method-details" class="payment-method-details"></div>
+
+      <div class="payment-modal-footer">
+        <button type="button" id="cancel-payment-modal-btn" class="btn-outline">Cancelar</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Modal de Tirilla / Recibo Térmico Imprimible -->
+  <dialog id="receipt-dialog" closedby="any">
+    <div class="dialog-head no-print">
+      <h2>Recibo de Venta</h2>
+      <button type="button" id="close-receipt-btn" class="btn-outline">Cerrar</button>
+    </div>
+    <div class="dialog-body" id="receipt-content"></div>
+  </dialog>
+
+  <!-- Modal de Pedidos Entrantes Web y Arqueo de Caja -->
+  <dialog id="orders-dialog" closedby="any">
+    <div class="dialog-head">
+      <h2>Arqueo de Turno y Pedidos POS</h2>
+      <button type="button" id="close-orders-btn" class="btn-outline">Cerrar</button>
+    </div>
+    <div class="dialog-body">
+      <!-- Selector de Sub-pestañas en el Diálogo -->
+      <div class="pos-dialog-tabs" role="tablist">
+        <button type="button" class="pos-dialog-tab-btn active" id="diag-tab-arqueo-btn" data-diag-view="arqueo">
+          📊 Cierre y Arqueo por Método
+        </button>
+        <button type="button" class="pos-dialog-tab-btn" id="diag-tab-creditos-btn" data-diag-view="creditos">
+          👥 Cuentas por Cobrar (<span id="diag-creditos-badge">0</span>)
+        </button>
+        <button type="button" class="pos-dialog-tab-btn" id="diag-tab-shipday-btn" data-diag-view="shipday">
+          🚚 Pedidos Shipday / D1
+        </button>
+      </div>
+
+      <!-- Vista 1: Cierre y Arqueo por Método -->
+      <div id="diag-view-arqueo">
+        <div class="kpi-row" style="grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));">
+          <div class="kpi-card">
+            <span>Facturación Total</span>
+            <strong id="kpi-total-sales">$0</strong>
+          </div>
+          <div class="kpi-card">
+            <span>Efectivo en Caja</span>
+            <strong id="kpi-cash-sales" style="color:var(--action);">$0</strong>
+          </div>
+          <div class="kpi-card">
+            <span>Tarjetas (Créd/Déb)</span>
+            <strong id="kpi-card-sales">$0</strong>
+          </div>
+          <div class="kpi-card">
+            <span>Transferencias</span>
+            <strong id="kpi-transfer-sales">$0</strong>
+          </div>
+          <div class="kpi-card">
+            <span>A Crédito (Pendiente)</span>
+            <strong id="kpi-credit-sales" style="color:var(--danger);">$0</strong>
+          </div>
+        </div>
+
+        <h3 class="pos-orders-title" style="margin-top:1.25rem;">Desglose Detallado por Método de Pago</h3>
+        <table class="breakdown-table">
+          <thead>
+            <tr>
+              <th>Método de Pago</th>
+              <th>Ventas / Cuotas</th>
+              <th style="text-align:right;">Total Recaudado</th>
+            </tr>
+          </thead>
+          <tbody id="arqueo-breakdown-tbody"></tbody>
+        </table>
+
+        <div style="display:flex;justify-content:flex-end;gap:0.6rem;margin-top:1rem;">
+          <button type="button" id="export-csv-btn" class="btn-outline">Exportar Cierre CSV</button>
+        </div>
+      </div>
+
+      <!-- Vista 2: Cuentas por Cobrar (Clientes que deben) -->
+      <div id="diag-view-creditos" hidden>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;flex-wrap:wrap;gap:0.5rem;">
+          <p class="pay-desc-note">Ventas entregadas a crédito con saldo pendiente por cobrar.</p>
+          <span style="font-weight:800;font-size:1.05rem;" id="total-cartera-badge">Total Cartera: $0</span>
+        </div>
+        <div id="credits-list-container" style="display:grid;gap:0.75rem;"></div>
+      </div>
+
+      <!-- Vista 3: Pedidos Shipday y D1 -->
+      <div id="diag-view-shipday" hidden>
+        <div class="pos-orders-header">
+          <h3 class="pos-orders-title">Órdenes Activas en Shipday y Base de Datos</h3>
+          <div class="admin-actions-group">
+            <button type="button" id="refresh-shipday-btn" class="btn-outline">Actualizar</button>
+          </div>
+        </div>
+        <div id="live-orders-container" class="pos-live-orders-grid"></div>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Modal de Aplicación de Descuentos en la Venta -->
+  <dialog id="pos-discount-dialog" class="pos-dialog no-print" closedby="any" style="max-width:440px;width:95%;border-radius:16px;padding:1.4rem;border:1px solid var(--border);box-shadow:0 20px 40px rgba(0,0,0,0.25);background:#FFF;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+      <h3 style="margin:0;font-size:1.2rem;display:flex;align-items:center;gap:0.4rem;">
+        🏷️ Aplicar Descuento a la Venta
+      </h3>
+      <button type="button" id="close-discount-dialog-btn" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--muted);">&times;</button>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:1rem;">
+      <!-- Modo de Descuento: Porcentaje vs Valor Fijo -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;background:var(--surface);padding:0.25rem;border-radius:10px;">
+        <button type="button" id="discount-tab-percent" class="filter-btn active" style="justify-content:center;height:38px;font-size:0.86rem;border:none;background:var(--text);color:#FFF;border-radius:8px;font-weight:700;cursor:pointer;">
+          % Porcentaje
+        </button>
+        <button type="button" id="discount-tab-amount" class="filter-btn" style="justify-content:center;height:38px;font-size:0.86rem;border:none;background:transparent;color:var(--text);border-radius:8px;font-weight:700;cursor:pointer;">
+          $ Valor Fijo (COP)
+        </button>
+      </div>
+
+      <!-- Sección Porcentaje -->
+      <div id="discount-percent-section">
+        <label style="font-size:0.82rem;font-weight:700;color:var(--muted);display:block;margin-bottom:0.4rem;">Atajos de porcentaje:</label>
+        <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:0.4rem;margin-bottom:0.6rem;">
+          <button type="button" class="btn-outline quick-percent-btn" data-val="5">5%</button>
+          <button type="button" class="btn-outline quick-percent-btn" data-val="10">10%</button>
+          <button type="button" class="btn-outline quick-percent-btn" data-val="15">15%</button>
+          <button type="button" class="btn-outline quick-percent-btn" data-val="20">20%</button>
+        </div>
+        <input type="number" id="discount-percent-input" placeholder="Otro % (Ej: 8)" min="1" max="100" style="width:100%;height:42px;border:1px solid var(--border);border-radius:8px;padding:0 0.8rem;font-size:0.95rem;font-family:inherit;">
+      </div>
+
+      <!-- Sección Valor Fijo -->
+      <div id="discount-amount-section" hidden>
+        <label style="font-size:0.82rem;font-weight:700;color:var(--muted);display:block;margin-bottom:0.4rem;">Atajos en pesos:</label>
+        <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:0.4rem;margin-bottom:0.6rem;">
+          <button type="button" class="btn-outline quick-amount-btn" data-val="5000">$5.000</button>
+          <button type="button" class="btn-outline quick-amount-btn" data-val="10000">$10.000</button>
+          <button type="button" class="btn-outline quick-amount-btn" data-val="20000">$20.000</button>
+        </div>
+        <input type="number" id="discount-amount-input" placeholder="Valor exacto en COP (Ej: 12000)" min="100" step="100" style="width:100%;height:42px;border:1px solid var(--border);border-radius:8px;padding:0 0.8rem;font-size:0.95rem;font-family:inherit;">
+      </div>
+
+      <!-- Motivo o Concepto -->
+      <div>
+        <label for="discount-reason-input" style="font-size:0.82rem;font-weight:700;color:var(--muted);display:block;margin-bottom:0.4rem;">
+          Motivo / Concepto (Opcional):
+        </label>
+        <input type="text" id="discount-reason-input" placeholder="Ej: Cliente VIP, Promoción o Cortesía" style="width:100%;height:40px;border:1px solid var(--border);border-radius:8px;padding:0 0.8rem;font-size:0.9rem;font-family:inherit;">
+      </div>
+
+      <!-- Previsualización del Descuento -->
+      <div style="background:#FFF7ED;border:1px solid #FFEDD5;border-radius:10px;padding:0.75rem;display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <span style="font-size:0.78rem;color:#9A3412;font-weight:700;text-transform:uppercase;display:block;">Ahorro para el cliente</span>
+          <strong id="discount-preview-amount" style="font-size:1.15rem;color:var(--danger);">-$0</strong>
+        </div>
+        <div style="text-align:right;">
+          <span style="font-size:0.78rem;color:#9A3412;font-weight:700;text-transform:uppercase;display:block;">Nuevo total a pagar</span>
+          <strong id="discount-preview-total" style="font-size:1.15rem;color:var(--action);">$0</strong>
+        </div>
+      </div>
+
+      <button type="button" id="confirm-apply-discount-btn" class="pos-charge-btn" style="justify-content:center;height:46px;margin-top:0.25rem;">
+        Confirmar y Aplicar a esta Venta
+      </button>
+    </div>
+  </dialog>
+
+  <!-- Coordinación de interfaz táctil móvil y light-dismiss para diálogos -->
+  <script>
+    (function() {
+      // 1. Selector de vista ágil para pantallas móviles y tablets (< 960px)
+      const catBtn = document.getElementById('pos-tab-catalog-btn');
+      const regBtn = document.getElementById('pos-tab-register-btn');
+      const backBtn = document.getElementById('pos-back-to-catalog-btn');
+      const jumpBtn = document.getElementById('pos-jump-to-register');
+      const catPanel = document.querySelector('.pos-catalog-panel');
+      const regAside = document.querySelector('.pos-register');
+      const bottomDock = document.getElementById('pos-mobile-bottom-dock');
+      const ticketBadge = document.getElementById('pos-mobile-ticket-count');
+      const dockCountBadge = document.getElementById('pos-dock-item-count');
+      const dockTotal = document.getElementById('pos-dock-total-amount');
+      const posTotal = document.getElementById('pos-total');
+      const ticketList = document.getElementById('pos-ticket-list');
+
+      function showRegister() {
+        if (!catBtn || !regBtn || !catPanel || !regAside) return;
+        catBtn.classList.remove('active');
+        catBtn.setAttribute('aria-selected', 'false');
+        regBtn.classList.add('active');
+        regBtn.setAttribute('aria-selected', 'true');
+        catPanel.classList.add('pos-mobile-hidden');
+        regAside.classList.remove('pos-mobile-hidden');
+        if (bottomDock) bottomDock.style.display = 'none';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      function showCatalog() {
+        if (!catBtn || !regBtn || !catPanel || !regAside) return;
+        regBtn.classList.remove('active');
+        regBtn.setAttribute('aria-selected', 'false');
+        catBtn.classList.add('active');
+        catBtn.setAttribute('aria-selected', 'true');
+        regAside.classList.add('pos-mobile-hidden');
+        catPanel.classList.remove('pos-mobile-hidden');
+        if (bottomDock && window.innerWidth < 960) bottomDock.style.display = 'flex';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      catBtn?.addEventListener('click', showCatalog);
+      backBtn?.addEventListener('click', showCatalog);
+      regBtn?.addEventListener('click', showRegister);
+      jumpBtn?.addEventListener('click', showRegister);
+
+      // Sincronización continua de totales e items en el dock
+      function updateDock() {
+        const count = ticketList ? ticketList.children.length : 0;
+        if (ticketBadge) ticketBadge.textContent = String(count);
+        if (dockCountBadge) dockCountBadge.textContent = String(count);
+        if (dockTotal && posTotal) dockTotal.textContent = posTotal.textContent;
+      }
+
+      if (ticketList) {
+        const observer = new MutationObserver(updateDock);
+        observer.observe(ticketList, { childList: true, subtree: true, characterData: true });
+      }
+      setInterval(updateDock, 300);
+
+      // Estado inicial en móvil
+      if (window.innerWidth < 960 && regAside) {
+        regAside.classList.add('pos-mobile-hidden');
+      }
+
+      window.addEventListener('resize', () => {
+        if (window.innerWidth >= 960) {
+          catPanel?.classList.remove('pos-mobile-hidden');
+          regAside?.classList.remove('pos-mobile-hidden');
+          if (bottomDock) bottomDock.style.display = 'none';
+        } else {
+          if (catBtn?.classList.contains('active')) {
+            regAside?.classList.add('pos-mobile-hidden');
+            catPanel?.classList.remove('pos-mobile-hidden');
+            if (bottomDock) bottomDock.style.display = 'flex';
+          } else {
+            catPanel?.classList.add('pos-mobile-hidden');
+            regAside?.classList.remove('pos-mobile-hidden');
+            if (bottomDock) bottomDock.style.display = 'none';
+          }
+        }
+      });
+
+      // 2. Soporte de Light-Dismiss (cerrar al hacer clic en el backdrop) para diálogos
+      document.querySelectorAll('dialog[closedby="any"]').forEach((dialog) => {
+        dialog.addEventListener('click', (event) => {
+          if (event.target !== dialog) return;
+          const rect = dialog.getBoundingClientRect();
+          const inside =
+            rect.top <= event.clientY &&
+            event.clientY <= rect.top + rect.height &&
+            rect.left <= event.clientX &&
+            event.clientX <= rect.left + rect.width;
+          if (!inside) dialog.close();
+        });
+      });
+    })();
+  </script>
+  <script type="module" src="/pos.js?v=20261107v3"></script>
+</body>
+</html>

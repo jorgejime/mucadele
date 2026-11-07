@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html lang="es-CO">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manual Operativo Paso a Paso (Para Dummies) · Mucadele Licores</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/pos.css?v=20261104v6">
+  <style>
+    :root {
+      --bg: #FFFFFF;
+      --surface: #F5F5F7;
+      --border: #E5E5EA;
+      --text: #111111;
+      --muted: #52525B;
+      --action: #00A844;
+      --action-active: #008A38;
+      --warn-bg: #FFFBEB;
+      --warn-border: #FDE68A;
+      --warn-text: #92400E;
+      --security-bg: #EFF6FF;
+      --security-border: #BFDBFE;
+      --security-text: #1E40AF;
+      --danger-bg: #FEF2F2;
+      --danger-border: #FECACA;
+      --danger-text: #991B1B;
+      --font: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background-color: var(--surface);
+      color: var(--text);
+      font-family: var(--font);
+      margin: 0;
+      padding: 0;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .manual-layout {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 1.5rem 1.25rem 4rem;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.75rem;
+      align-items: start;
+    }
+
+    @media (min-width: 992px) {
+      .manual-layout {
+        grid-template-columns: 310px minmax(0, 1fr);
+      }
+    }
+
+    .manual-nav {
+      position: sticky;
+      top: 5.25rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.15rem;
+      display: grid;
+      gap: 0.35rem;
+      max-height: calc(100vh - 6.5rem);
+      overflow-y: auto;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+    }
+
+    .manual-nav-title {
+      font-size: 0.76rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      padding: 0.35rem 0.65rem;
+      margin-bottom: 0.25rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .manual-nav a {
+      text-decoration: none;
+      color: var(--text);
+      font-size: 0.88rem;
+      font-weight: 700;
+      padding: 0.55rem 0.75rem;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      transition: all 0.15s ease-in-out;
+    }
+
+    .manual-nav a:hover {
+      background: var(--surface);
+      color: var(--action);
+      transform: translateX(2px);
+    }
+
+    .manual-nav a .nav-pill {
+      font-size: 0.72rem;
+      font-weight: 800;
+      background: var(--surface);
+      color: var(--muted);
+      padding: 0.15rem 0.45rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+
+    .manual-content {
+      display: grid;
+      gap: 1.75rem;
+    }
+
+    .manual-section {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 1.65rem;
+      scroll-margin-top: 5.5rem;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+    }
+
+    .manual-section h2 {
+      margin: 0 0 0.65rem 0;
+      font-size: 1.35rem;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      flex-wrap: wrap;
+    }
+
+    .step-badge {
+      background: var(--action);
+      color: #FFFFFF;
+      font-size: 0.78rem;
+      font-weight: 800;
+      padding: 0.28rem 0.7rem;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .step-badge.security {
+      background: #1E40AF;
+    }
+
+    .step-badge.admin {
+      background: #0F172A;
+    }
+
+    .step-badge.pos {
+      background: #0284C7;
+    }
+
+    .step-list {
+      display: grid;
+      gap: 1rem;
+      margin-top: 1.15rem;
+    }
+
+    .step-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.1rem 1.25rem;
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+
+    .step-num {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: var(--text);
+      color: var(--bg);
+      font-weight: 800;
+      font-size: 0.95rem;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      margin-top: 0.1rem;
+    }
+
+    .step-num.green {
+      background: var(--action);
+      color: #FFFFFF;
+    }
+
+    .step-num.blue {
+      background: #1E40AF;
+      color: #FFFFFF;
+    }
+
+    .step-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .step-body h3 {
+      margin: 0 0 0.35rem 0;
+      font-size: 1.05rem;
+      font-weight: 800;
+    }
+
+    .step-body p {
+      margin: 0 0 0.5rem 0;
+      color: var(--muted);
+      font-size: 0.94rem;
+      line-height: 1.58;
+    }
+
+    .step-body p:last-child {
+      margin-bottom: 0;
+    }
+
+    .tip-box {
+      margin-top: 1.15rem;
+      padding: 1rem 1.2rem;
+      border-radius: 12px;
+      background: #ECFDF5;
+      border: 1px solid #A7F3D0;
+      color: #065F46;
+      font-size: 0.92rem;
+      line-height: 1.55;
+    }
+
+    .warn-box {
+      margin-top: 1.15rem;
+      padding: 1rem 1.2rem;
+      border-radius: 12px;
+      background: var(--warn-bg);
+      border: 1px solid var(--warn-border);
+      color: var(--warn-text);
+      font-size: 0.92rem;
+      line-height: 1.55;
+    }
+
+    .security-box {
+      margin-top: 1.15rem;
+      padding: 1rem 1.2rem;
+      border-radius: 12px;
+      background: var(--security-bg);
+      border: 1px solid var(--security-border);
+      color: var(--security-text);
+      font-size: 0.92rem;
+      line-height: 1.55;
+    }
+
+    .danger-box {
+      margin-top: 1.15rem;
+      padding: 1rem 1.2rem;
+      border-radius: 12px;
+      background: var(--danger-bg);
+      border: 1px solid var(--danger-border);
+      color: var(--danger-text);
+      font-size: 0.92rem;
+      line-height: 1.55;
+    }
+
+    code.kbd {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      padding: 0.15rem 0.5rem;
+      border-radius: 6px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-weight: 800;
+      color: var(--text);
+      font-size: 0.88em;
+      white-space: nowrap;
+    }
+
+    .manual-table-wrap {
+      overflow-x: auto;
+      margin-top: 1rem;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+
+    table.manual-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+      background: var(--bg);
+    }
+
+    table.manual-table th,
+    table.manual-table td {
+      padding: 0.75rem 0.9rem;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    table.manual-table th {
+      background: var(--surface);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-weight: 800;
+      color: var(--muted);
+    }
+
+    table.manual-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .pill-tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      font-size: 0.76rem;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .pill-green {
+      background: #DCFCE7;
+      color: #166534;
+    }
+
+    .pill-amber {
+      background: #FEF3C7;
+      color: #92400E;
+    }
+
+    .pill-red {
+      background: #FEE2E2;
+      color: #991B1B;
+    }
+
+    .pill-blue {
+      background: #DBEAFE;
+      color: #1E40AF;
+    }
+
+    .pill-gray {
+      background: #E5E5EA;
+      color: #27272A;
+    }
+
+    .tab-header-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 5px solid var(--action);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    .tab-header-card.blue {
+      border-left-color: #1E40AF;
+    }
+
+    .tab-header-card.purple {
+      border-left-color: #7C3AED;
+    }
+
+    .tab-header-card.amber {
+      border-left-color: #D97706;
+    }
+
+    .tab-header-card h3 {
+      margin: 0 0 0.25rem 0;
+      font-size: 1.1rem;
+      font-weight: 800;
+    }
+
+    .tab-header-card p {
+      margin: 0;
+      font-size: 0.92rem;
+      color: var(--muted);
+    }
+
+    @media print {
+      body {
+        background: #FFFFFF;
+        color: #000000;
+      }
+      .no-print {
+        display: none !important;
+      }
+      .manual-layout {
+        display: block;
+        padding: 0;
+        max-width: 100%;
+      }
+      .manual-section {
+        border: 1px solid #CCC;
+        box-shadow: none;
+        page-break-inside: avoid;
+        margin-bottom: 1.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Topbar del Manual Operativo -->
+  <header class="pos-header no-print">
+    <div class="pos-brand">
+      <span class="pos-badge" style="background:var(--action);">MANUAL OPERATIVO OFICIAL</span>
+      <h1>Guía Paso a Paso (Para Dummies) · Mucadele Licores</h1>
+    </div>
+
+    <div class="pos-actions">
+      <a href="/pos" class="btn-outline" style="border-color:var(--text);font-weight:800;">
+        🖥️ Ir a Caja POS
+      </a>
+      <a href="/admin" class="btn-outline" style="border-color:var(--action);color:var(--action);font-weight:800;">
+        ⚙️ Ir al Panel Admin
+      </a>
+      <a href="/" class="btn-outline">🛒 Ver Tienda</a>
+      <button type="button" onclick="window.print()" class="btn-outline" title="Imprimir este manual en papel">
+        🖨️ Imprimir Manual
+      </button>
+      <a href="/api/logout?next=/admin" class="btn-outline" title="Cerrar la sesión administrativa">
+        Cerrar sesión
+      </a>
+    </div>
+  </header>
+
+  <div class="manual-layout">
+    <!-- Índice Lateral de Navegación Rápida -->
+    <aside class="manual-nav no-print" aria-label="Índice general del manual">
+      <div class="manual-nav-title">Contenido del Manual</div>
+      <a href="#mapa">
+        <span>0. Mapa de la Plataforma</span>
+        <span class="nav-pill">General</span>
+      </a>
+      <a href="#acceso">
+        <span>1. Seguridad y Acceso Admin</span>
+        <span class="nav-pill">Seguridad</span>
+      </a>
+      <a href="#tab1-inventario">
+        <span>2. Pestaña 1: Catálogo e Inventario</span>
+        <span class="nav-pill">Admin</span>
+      </a>
+      <a href="#tab2-proveedores">
+        <span>3. Pestaña 2: Proveedores y OC-AUTO</span>
+        <span class="nav-pill">Admin</span>
+      </a>
+      <a href="#tab3-domiciliarios">
+        <span>4. Pestaña 3: Domiciliarios y Shipday</span>
+        <span class="nav-pill">Admin</span>
+      </a>
+      <a href="#tab4-historial">
+        <span>5. Pestaña 4: Historial de Ventas</span>
+        <span class="nav-pill">Admin</span>
+      </a>
+      <a href="#caja-pos">
+        <span>6. Caja POS: Operación Táctil</span>
+        <span class="nav-pill">POS</span>
+      </a>
+      <a href="#calculadora-tirilla">
+        <span>7. Calculadora y Tirilla 80mm</span>
+        <span class="nav-pill">POS</span>
+      </a>
+      <a href="#arqueo">
+        <span>8. Cierre de Turno y Arqueo</span>
+        <span class="nav-pill">Caja</span>
+      </a>
+      <a href="#preguntas">
+        <span>9. Preguntas y Solución Rápida</span>
+        <span class="nav-pill">FAQ</span>
+      </a>
+    </aside>
+
+    <!-- Contenido Central del Manual -->
+    <main class="manual-content">
+
+      <!-- SECCIÓN 0: MAPA DE LA PLATAFORMA -->
+      <section id="mapa" class="manual-section">
+        <span class="step-badge">Bienvenido</span>
+        <h2 style="margin-top:0.5rem;">Arquitectura y Uso Diario de la Plataforma Mucadele</h2>
+        <p style="color:var(--muted);line-height:1.6;margin:0 0 1.25rem 0;">
+          Bienvenido al manual oficial de operaciones de <strong>Mucadele Licores</strong> (Calle 11 # 24-36, Santa Marta). Esta guía está redactada en lenguaje sencillo, directo y paso a paso para que cualquier persona del equipo —desde el cajero de turno hasta el administrador general— pueda operar la tienda en línea, el inventario físico, los despachos por motorizados y el cobro en mostrador sin cometer errores.
+        </p>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:0.9rem;">
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1.1rem;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;">
+              <strong style="font-size:1.02rem;">🛒 Tienda de Clientes</strong>
+              <span class="pill-tag pill-green">Público</span>
+            </div>
+            <p style="font-size:0.86rem;color:var(--muted);margin:0 0 0.75rem 0;">
+              Donde los clientes de Santa Marta ven los licores y piden a domicilio desde su celular.
+            </p>
+            <a href="/" target="_blank" rel="noopener noreferrer" style="font-size:0.86rem;font-weight:800;color:var(--action);text-decoration:none;">
+              mucadele.com.co →
+            </a>
+          </div>
+
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1.1rem;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;">
+              <strong style="font-size:1.02rem;">🖥️ Caja POS Local</strong>
+              <span class="pill-tag pill-blue">Privado</span>
+            </div>
+            <p style="font-size:0.86rem;color:var(--muted);margin:0 0 0.75rem 0;">
+              Terminal táctil para cobrar en mostrador o despachar pedidos recibidos por WhatsApp.
+            </p>
+            <a href="/pos" style="font-size:0.86rem;font-weight:800;color:var(--action);text-decoration:none;">
+              mucadele.com.co/pos →
+            </a>
+          </div>
+
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1.1rem;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;">
+              <strong style="font-size:1.02rem;">⚙️ Panel Administrativo</strong>
+              <span class="pill-tag pill-gray">Superadmin</span>
+            </div>
+            <p style="font-size:0.86rem;color:var(--muted);margin:0 0 0.75rem 0;">
+              Consola central de 4 pestañas para stock, precios, proveedores, motorizados e historial.
+            </p>
+            <a href="/admin" style="font-size:0.86rem;font-weight:800;color:var(--action);text-decoration:none;">
+              mucadele.com.co/admin →
+            </a>
+          </div>
+        </div>
+
+        <div class="tip-box">
+          <strong>💡 Regla de Oro en Mucadele:</strong> La base de datos es <strong>única y centralizada en tiempo real (Cloudflare D1)</strong>. Si se vende una botella en la Caja POS del local, el inventario se descuenta automáticamente de la página web al instante, evitando que dos clientes compren la misma botella.
+        </div>
+      </section>
+
+      <!-- SECCIÓN 1: SEGURIDAD, LOGIN Y SECRETOS CLOUDFLARE -->
+      <section id="acceso" class="manual-section">
+        <h2>
+          <span class="step-badge security">Paso 1</span>
+          Seguridad, Inicio de Sesión y Protección de Credenciales
+        </h2>
+        <p style="color:var(--muted);margin:0;">
+          Para garantizar la seguridad del negocio, la <strong>Caja POS</strong> y el <strong>Panel Administrativo</strong> están blindados y protegidos por el servidor. Ningún cliente o atacante externo puede alterar precios, inventarios ni ver datos privados.
+        </p>
+
+        <div class="step-list">
+          <div class="step-card">
+            <div class="step-num blue">1</div>
+            <div class="step-body">
+              <h3>Rutas privadas sin enlaces visibles en la tienda pública</h3>
+              <p>
+                La tienda web para clientes (<a href="/">mucadele.com.co</a>) <strong>no tiene ningún botón ni enlace visible</strong> hacia la administración ni hacia el POS. Esto evita que personas ajenas intenten ingresar. Para acceder al sistema interno, debes escribir directamente en la barra del navegador <code class="kbd">mucadele.com.co/admin</code> o <code class="kbd">mucadele.com.co/pos</code>.
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-num blue">2</div>
+            <div class="step-body">
+              <h3>Credenciales oficiales y botón "Mostrar contraseña"</h3>
+              <p>
+                • <strong>Usuario:</strong> <code class="kbd">superadmin</code><br>
+                • <strong>Contraseña:</strong> Tu clave maestra asignada de alta seguridad.<br>
+                • <strong>Botón Mostrar:</strong> Justo arriba del campo de clave verás el texto verde <strong>"Mostrar"</strong>. Púlsalo para verificar visualmente que no haya letras equivocadas antes de dar clic en <strong>"Ingresar"</strong>.
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-num blue">3</div>
+            <div class="step-body">
+              <h3>Protección contra Fuerza Bruta (Bloqueo de 15 minutos)</h3>
+              <p>
+                El sistema cuenta con un centinela de seguridad automática en el servidor: <strong>si se ingresa una contraseña errónea 5 veces consecutivas</strong> desde el mismo dispositivo o red, el servidor bloqueará temporalmente el acceso por <strong>15 minutos</strong> emitiendo el mensaje de protección: <em>"Demasiados intentos de inicio de sesión. Intente nuevamente en 15 minutos"</em>.
+              </p>
+              <p style="font-size:0.88rem;color:var(--muted);margin-top:0.35rem;">
+                <em>¿Qué hacer si te ocurre?</em> No intentes seguir escribiendo desesperadamente. Espera con calma los 15 minutos para que el temporizador se desbloquee automáticamente y luego ingresa la clave con cuidado usando el botón "Mostrar".
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-num blue">4</div>
+            <div class="step-body">
+              <h3>Credenciales extraídas a Secretos Seguros de Cloudflare Pages</h3>
+              <p>
+                En la plataforma modernizada, <strong>ninguna contraseña, clave secreta HMAC ni token de Shipday existe en texto plano dentro del código del sistema</strong>. Todas las credenciales están blindadas en el baúl criptográfico de secretos de Cloudflare Pages (<code class="kbd">ADMIN_PASS</code>, <code class="kbd">TOKEN_SECRET</code>, <code class="kbd">SHIPDAY_API_KEY</code>). Nadie que descargue el código o inspeccione la página puede extraer las claves del negocio.
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-num blue">5</div>
+            <div class="step-body">
+              <h3>Sesión protegida por 7 días y cierre seguro</h3>
+              <p>
+                Una vez ingresas con éxito, el sistema emite una cookie segura (<code class="kbd">HttpOnly; SameSite=Strict; Secure</code>) que te mantiene conectado durante 7 días en ese dispositivo para que no tengas que escribir la contraseña en cada venta. Si vas a dejar el computador o tablet desatendido, haz clic en el botón <strong>"Cerrar sesión"</strong> en la esquina superior derecha para desconectarte de forma inmediata y segura.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="security-box">
+          <strong>🔒 Blindaje de Privacidad de los Motorizados:</strong> Los números telefónicos y datos personales de los domiciliarios ya no son públicos. Solamente el personal autenticado en el Panel Admin puede visualizar los celulares de la flota de reparto.
+        </div>
+      </section>
+
+      <!-- SECCIÓN 2: PESTAÑA 1 - CATÁLOGO E INVENTARIO -->
+      <section id="tab1-inventario" class="manual-section">
+        <h2>
+          <span class="step-badge admin">Pestaña 1</span>
+          Panel Admin · Catálogo e Inventario de Productos en Vivo
+        </h2>
+
+        <div class="tab-header-card">
+          <h3>Pestaña 1: "1. Inventario y Productos" (`data-tab="inventory"`)</h3>
+          <p>
+            Es la pantalla principal del panel administrativo. Aquí controlas las existencias físicas de botellas en bodega, ajustas precios de venta al público en 1 segundo y gestionas la visibilidad en la tienda web.
+          </p>
+        </div>
+
+        <div class="step-list">
+          <div class="step-card">
+            <div class="step-num green">1</div>
+            <div class="step-body">
+              <h3>Crear un nuevo producto con el cuadro de diálogo nativo (<code class="kbd">&lt;dialog&gt;</code>)</h3>
+              <p>
+                Haz clic en el botón verde superior <strong>"+ Crear Nuevo Producto"</strong>. Se abrirá suavemente una ventana modal nativa de la plataforma (<code class="kbd">&lt;dialog&gt;</code>) que no recarga la página:
+              </p>
+              <p>
+                • <strong>Nombre del Producto:</strong> Escribe el nombre completo comercial (ej. <em>Whisky Buchanan's Master</em>).<br>
+                • <strong>Presentación / Tamaño:</strong> Detalla el volumen (ej. <em>Botella 750 ml</em>, <em>Media 375 ml</em> o <em>Six Pack Latas</em>).<br>
+                • <strong>Categoría:</strong> Selecciona en qué filtro de la web aparecerá (<em>Whisky</em>, <em>Aguardiente y Ron</em>, <em>Cervezas</em> o <em>Tequila, Vodka, Hielo y Pasantes</em>).<br>
+                • <strong>Precio de Venta (COP):</strong> Escribe el valor <strong>sin puntos ni comas</strong> (ejemplo: para ciento noventa y cinco mil pesos, escribe <code class="kbd">195000</code>).<br>
+                • <strong>Stock Actual (Unidades):</strong> Conteo físico real de botellas que tienes en el estante (ejemplo: <code class="kbd">12</code>).<br>
+                • <strong>Proveedor Asignado:</strong> Selecciona qué distribuidora te vende este licor (Bavaria, Dislicores, etc.).<br>
+                • <strong>Punto de Pedido Automático:</strong> Programa a qué stock mínimo disparar la alerta (<code class="kbd">Mín</code>, ej. 6) y cuántas pedir (<code class="kbd">Pedir</code>, ej. 12).<br>
+                • <strong>Fotografía:</strong> Pega la URL de una foto o pulsa uno de los botones rápidos inferiores (<em>Foto Whisky, Foto Guaro, Foto Ron, Foto Cerveza, Foto Hielo/Soda</em>).<br>
+                • <strong>Guardar:</strong> Pulsa <strong>"Guardar Producto"</strong>. Si necesitas cerrar el diálogo sin guardar, puedes pulsar la tecla <code class="kbd">Escape</code> o el botón <strong>"Cerrar"</strong>.
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-num green">2</div>
+            <div class="step-body">
+              <h3>Ajustes rápidos de stock en vivo (+1, +6, +12 o conteo numérico directo)</h3>
+              <p>
+                En la columna <strong>"Inventario (Stock Actual)"</strong> de la tabla, tienes botones táctiles inmediatos para cuando estás atendiendo y llega mercancía:
+              </p>
+              <p>
+                • <code class="kbd">−1</code>: Resta 1 unidad (por si hubo rotura de botella o ajuste manual).<br>
+                • <code class="kbd">+1</code>: Suma 1 unidad al instante.<br>
+                • <code class="kbd">+6</code>: Suma 6 unidades en 1 clic (ideal para six-packs de cerveza o medias cajas).<br>
+                • <code class="kbd">+12</code>: Suma 12 unidades en 1 clic (ideal cuando destapas una caja completa de 12 botellas).<br>
+                • <strong>Conteo numérico directo:</strong> Puedes hacer clic sobre el número dentro de la casilla blanca, digitar el valor físico exacto (ej. <code class="kbd">48</code>) y presionar <code class="kbd">Enter</code>.
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-num green">3</div>
+            <div class="step-body">
+              <h3>Cambiar precios con guardado inmediato en 1 clic (<code class="kbd">💾</code>)</h3>
+              <p>
+                En la columna <strong>"Precio Venta (COP)"</strong>, escribe el nuevo valor numérico y haz clic sobre el botón del disquete <code class="kbd">💾</code> contiguo. El sistema emitirá una notificación negra en la esquina inferior derecha confirmando: <em>"Inventario actualizado en tiempo real"</em>. Ese nuevo precio ya está activo tanto en la tienda web como en la caja POS.
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-num green">4</div>
+            <div class="step-body">
+              <h3>Semáforo visual de stock y validación estricta en el servidor</h3>
+              <p>
+                La columna <strong>"Estado y Reabastecimiento"</strong> muestra el semáforo operativo de cada referencia:
+              </p>
+              <p>
+                • <span class="pill-tag pill-green">En Stock (X uds)</span>: Inventario saludable por encima del umbral mínimo.<br>
+                • <span class="pill-tag pill-amber">Stock Bajo (X uds)</span>: Quedan pocas unidades (igual o menor al <code class="kbd">Mín</code> programado). El botón se transforma en <code class="kbd">📲 Pedir al Proveedor</code>.<br>
+                • <span class="pill-tag pill-red">AGOTADO (0 uds)</span>: Se acabaron las existencias. En la web el producto cambia automáticamente a botón gris <em>"Agotado"</em>.<br>
+                • <strong>Validación Estricta de Stock en D1:</strong> A nivel de servidor, el sistema rechaza automáticamente cualquier intento de compra web o de POS que supere las unidades físicas registradas en la base de datos D1. Ya no es posible vender en negativo ni generar sobreventa accidental.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="tip-box">
+          <strong>💡 Edición y Ocultamiento:</strong> Para cambiar el nombre o foto de un licor ya creado, usa el botón <strong>"Editar"</strong> de la fila. Si un licor no ha llegado pero no quieres borrarlo, haz clic en <strong>"Ocultar"</strong> para sacarlo temporalmente de la tienda web sin perder su configuración.
+        </div>
+      </section>
+
+      <!-- SECCIÓN 3: PESTAÑA 2 - PROVEEDORES Y ÓRDENES AUTOMÁTICAS -->
+      <section id="tab2-proveedores" class="manual-section">
+        <h2>
+          <span class="step-badge admin">Pestaña 2</span>
+          Panel Admin · Proveedores y Órdenes de Compra Automáticas (OC-AUTO)
+        </h2>
+
+        <div class="tab-header-card blue">
+          <h3>Pestaña 2: "2. Proveedores y Pedidos por Stock Mínimo" (`data-tab="suppliers"`)</h3>
+          <p>
+            Automatiza la relación con tus distribuidores mayoristas y preventistas. Configura el umbral de reposición y genera pedidos por WhatsApp con 1 toque.
+          </p>
+        </div>
+
+        <div class="step-list">
+          <div class="step-card">
+            <div class="step-num blue">1</div>
+            <div class="step-body">
+              <h3>Registrar distribuidores y números de preventistas</h3>
+              <p>
+                En el panel inferior derecho (<strong>+ Registrar Nuevo Proveedor</strong>), completa los datos del asesor de ventas:
+              </p>
+              <p>
+                • <strong>Empresa / Distribuidora:</strong> Nombre de la firma (ej. <em>Dislicores</em>, <em>Bavaria</em>, <em>Distribuidora El Faro</em>).<br>
+                • <strong>Nombre del Preventista:</strong> Nombre de la persona que te visita (ej. <em>Andrés Gómez - Ruta Comuna 3</em>).<br>
+                • <strong>Celular / WhatsApp de Pedidos (10 dígitos):</strong> Número celular exacto colombiano (ej. <code class="kbd">3015153867</code>).<br>
+                • <strong>Días de Visita o Entrega:</strong> Para recordar cuándo pasa el camión (ej. <em>Martes y Viernes</em>).<br>
+                • Haz clic en <strong>"Guardar Proveedor"</strong>.
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-num blue">2</div>
+            <div class="step-body">
+              <h3>Programación de Mínimo y Lote de Reposición (<code class="kbd">Mín</code> y <code class="kbd">Pedir</code>)</h3>
+              <p>
+                En la Pestaña 1 (o al editar un producto) configuras la regla matemática de reposición:
+              </p>
+              <p>
+                • <strong>Casilla <code class="kbd">Mín</code> (Stock Mínimo):</strong> El nivel de alarma. Ejemplo: si pones <code class="kbd">6</code>, tan pronto queden 6 botellas en estante, se genera la orden de compra.<br>
+                • <strong>Casilla <code class="kbd">Pedir</code> (Cantidad a Reponer):</strong> El tamaño del pedido estándar al distribuidor (ej. <code class="kbd">12</code> o <code class="kbd">24</code> botellas para pedir por caja completa).
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-num blue">3</div>
+            <div class="step-body">
+              <h3>Generación automática de órdenes <code class="kbd">#OC-AUTO-...</code></h3>
+              <p>
+                Cada vez que una venta en mostrador o un pedido web hace que el stock caiga a su nivel mínimo, el sistema crea en tiempo real una orden de compra bajo el prefijo <code class="kbd">#OC-AUTO-[FECHA]</code> dentro de la Pestaña 2, indicando exactamente qué producto y cuántas cajas hacen falta.
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-num blue">4</div>
+            <div class="step-body">
+              <h3>Envío por WhatsApp al preventista y recepción de mercancía en 1 clic</h3>
+              <p>
+                • <strong>Enviar por WhatsApp:</strong> Haz clic en el botón verde <strong>"📲 Enviar por WhatsApp al Proveedor"</strong>. Se abrirá WhatsApp Web o la App móvil con un mensaje pre-redactado profesionalmente que incluye la referencia, cantidad solicitada y datos de Mucadele Licores.<br>
+                • <strong>Recibir la mercancía cuando llega el camión:</strong> Cuando el camión descargue las cajas en el local, busca la orden en la Pestaña 2 y pulsa el botón negro <strong>"📥 Recibir Mercancía (+Sumar al Stock)"</strong>. El sistema sumará automáticamente todas las botellas al inventario sin que tengas que sumarlas una por una.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECCIÓN 4: PESTAÑA 3 - DOMICILIARIOS Y FLOTA SHIPDAY -->
+      <section id="tab3-domiciliarios" class="manual-section">
+        <h2>
+          <span class="step-badge admin">Pestaña 3</span>
+          Panel Admin · Domiciliarios y Flota Satelital Shipday
+        </h2>
+
+        <div class="tab-header-card purple">
+          <h3>Pestaña 3: "3. Domiciliarios (Shipday)" (`data-tab="carriers"`)</h3>
+          <p>
+            Controla tu equipo de motorizados en Santa Marta, conéctalos con la plataforma de rastreo GPS Shipday y administra la asignación automática de carreras.
+          </p>
+        </div>
+
+        <div class="step-list">
+          <div class="step-card">
+            <div class="step-num" style="background:#7C3AED;color:#FFF;">1</div>
+            <div class="step-body">
+              <h3>Registrar un nuevo domiciliario en la plataforma</h3>
+              <p>
+                En el panel derecho de la Pestaña 3 (<strong>+ Registrar Nuevo Domiciliario</strong>):
+              </p>
+              <p>
+                • <strong>Nombre Completo:</strong> Nombre y apellido del repartidor (ej. <em>Carlos Mendoza</em>).<br>
+                • <strong>Celular / WhatsApp (10 dígitos):</strong> Número de contacto directo (ej. <code class="kbd">3001234567</code>).<br>
+                • <strong>Correo Electrónico:</strong> Email para que reciba la invitación de acceso a la aplicación satelital.<br>
+                • <strong>Fijar como Principal:</strong> Marca esta casilla si este motorizado será el encargado principal de los pedidos web.<br>
+                • Haz clic en <strong>"Guardar y Sincronizar con Shipday"</strong>.
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-num" style="background:#7C3AED;color:#FFF;">2</div>
+            <div class="step-body">
+              <h3>Instalación de la aplicación "Shipday Drive" en el celular del motorizado</h3>
+              <p>
+                Cada repartidor debe descargar en su teléfono Android (Google Play Store) o iPhone (Apple App Store) la aplicación oficial y gratuita llamada <strong>"Shipday Drive"</strong>. Cuando lo creas en el Admin, Shipday le envía un enlace directo a su correo o SMS para activar su cuenta. Al estar en turno, la aplicación le avisará con una alarma sonora cada vez que entre un nuevo pedido y le mostrará la ruta GPS más rápida en Santa Marta.
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-num" style="background:#7C3AED;color:#FFF;">3</div>
+            <div class="step-body">
+              <h3>Designar el "Domiciliario Principal" para auto-asignación</h3>
+              <p>
+                En la lista izquierda verás tus motorizados registrados. Uno de ellos tendrá la etiqueta verde <strong>"PRINCIPAL (Auto-Asignación)"</strong>. Esto significa que cada cliente que complete una orden en la tienda web será asignado de inmediato al celular de ese motorizado.
+              </p>
+              <p>
+                <em>¿Cambio de turno?</em> Si el domiciliario principal termina su jornada o descansa hoy, solo pulsa el botón <strong>"Fijar como Principal"</strong> al lado del motorizado que esté cubriendo el turno actual.
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-num" style="background:#7C3AED;color:#FFF;">4</div>
+            <div class="step-body">
+              <h3>Blindaje de datos de contacto de los domiciliarios</h3>
+              <p>
+                Por cumplimiento de seguridad y privacidad laboral, los teléfonos celulares de los motorizados ya no están expuestos en endpoints públicos de pedidos. La única forma de consultar, editar o dar de baja a un repartidor es a través de esta Pestaña 3 autenticada por el administrador.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECCIÓN 5: PESTAÑA 4 - HISTORIAL DE VENTAS Y DESPACHOS -->
+      <section id="tab4-historial" class="manual-section">
+        <h2>
+          <span class="step-badge admin">Pestaña 4</span>
+          Panel Admin · Historial de Ventas, Pedidos Web y Despachos
+        </h2>
+
+        <div class="tab-header-card amber">
+          <h3>Pestaña 4: "4. Historial de Ventas y Despachos" (`data-tab="orders"`)</h3>
+          <p>
+            Auditoría permanente de todas las transacciones realizadas en la plataforma (ventas de mostrador y pedidos web a domicilio), con trazabilidad de cliente, motorizado asignado y exportación contable.
+          </p>
+        </div>
+
+        <div class="step-list">
+          <div class="step-card">
+            <div class="step-num" style="background:#D97706;color:#FFF;">1</div>
+            <div class="step-body">
+              <h3>Supervisión en vivo de órdenes activas</h3>
+              <p>
+                Al entrar a la Pestaña 4, el sistema consulta en tiempo real los despachos activos tanto en la base de datos local como en Shipday. Puedes ver el número de orden (ej. <code class="kbd">#MUC-857066</code> o <code class="kbd">#POS-1042</code>), el cliente, el medio de pago, el valor total cobrado y el estado de la entrega.
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-num" style="background:#D97706;color:#FFF;">2</div>
+            <div class="step-body">
+              <h3>Seguimiento GPS satelital en vivo</h3>
+              <p>
+                Para cualquier pedido con domicilio, el sistema guarda el enlace directo de rastreo satelital. Puedes hacer clic en <strong>"Ver Tracking GPS"</strong> para abrir el mapa y ver por dónde va la moto en las calles de Santa Marta (Rodadero, Pozos Colorados, Centro, Mamatoco, etc.).
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-num" style="background:#D97706;color:#FFF;">3</div>
+            <div class="step-body">
+              <h3>Descargar reporte consolidado en Excel (CSV)</h3>
+              <p>
+                En la parte superior derecha de la Pestaña 4, haz clic en el botón <strong>"Descargar Excel (CSV)"</strong>. Se descargará a tu computador una hoja de cálculo con todas las órdenes del histórico: fecha, hora, cliente, teléfono, dirección, productos, total vendido y motorizado que entregó. Ideal para cuadre de caja mensual y contabilidad.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECCIÓN 6: CAJA POS - OPERACIÓN TÁCTIL MÓVIL Y MOSTRADOR -->
+      <section id="caja-pos" class="manual-section">
+        <h2>
+          <span class="step-badge pos">Paso 6</span>
+          Caja POS · Terminal de Venta Táctil Rápida (Móvil, Tablet y Mostrador)
+        </h2>
+        <p style="color:var(--muted);margin:0;">
+          La Caja POS (<a href="/pos">mucadele.com.co/pos</a>) está diseñada para operar con agilidad extrema directamente desde el computador de caja, una tablet o el celular del cajero en el local de la Calle 11 # 24-36.
+        </p>
+
+        <div class="step-list">
+          <div class="step-card">
+            <div class="step-num green">1</div>
+            <div class="step-body">
+              <h3>Diseño táctil optimizado para pantallas táctiles (Objetivos de 44px+)</h3>
+              <p>
+                Todos los botones de productos, categorías, sumadores de unidades (<code class="kbd">+</code>, <code class="kbd">−</code>) y botones de cobro cumplen con el estándar táctil ergonómico de <strong>al menos 44 píxeles de altura</strong>. Esto permite tocar la pantalla con los dedos rápidamente sin equivocarse de producto ni cansar la vista en turnos nocturnos de alta afluencia.
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-num green">2</div>
+            <div class="step-body">
+              <h3>Selector rápido de categorías y buscador instantáneo</h3>
+              <p>
+                En el panel izquierdo del POS encuentras:
+              </p>
+              <p>
+                • <strong>Buscador:</strong> Escribe dos letras (ej. <em>"ol"</em> para Old Parr o <em>"cl"</em> para Club Colombia) y la cuadrícula filtrará los productos inmediatamente.<br>
+                • <strong>Botones de Categoría:</strong> Pestañas redondas superiores (<em>Todo, Whisky, Guaro y Ron, Cervezas, Tequila y Hielo</em>) para saltar de una sección a otra con un solo toque.<br>
+                • <strong>Indicador de Stock y Agotado:</strong> Cada tarjeta de licor indica en texto pequeño su stock disponible. Si una referencia llega a 0, se deshabilita para evitar que la cobres por error.
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-num green">3</div>
+            <div class="step-body">
+              <h3>Modalidad A: Venta en Mostrador (Sin domicilio)</h3>
+              <p>
+                1. Asegúrate de que en la parte superior derecha esté marcado el botón negro <strong>"Mostrador (Sin domicilio)"</strong> (así no se cobra el recargo de $6.000 de envío).<br>
+                2. Toca en la cuadrícula las botellas o cervezas que el cliente se va a llevar.<br>
+                3. Si el cliente pide varias unidades de lo mismo, puedes tocar el botón varias veces o usar el botón <code class="kbd">+</code> en el ticket de la derecha.<br>
+                4. En <strong>"Pago en Caja"</strong>, elige cómo cancela el cliente: <em>Efectivo</em>, <em>Nequi / Daviplata</em> o <em>Datáfono / Tarjeta</em>.<br>
+                5. Toca el botón verde grande <strong>"Cobrar en mostrador"</strong>. La venta queda registrada y se abre la tirilla.
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-num green">4</div>
+            <div class="step-body">
+              <h3>Modalidad B: Venta a Domicilio (WhatsApp o Teléfono) desde el POS</h3>
+              <p>
+                Si un cliente llama o escribe al WhatsApp de la licorería para pedir un domicilio:
+              </p>
+              <p>
+                1. Toca arriba a la derecha el selector <strong>"Enviar a Domicilio"</strong>. El sistema sumará automáticamente el valor reglamentario de envío ($6.000 COP).<br>
+                2. Toca los licores solicitados por el cliente.<br>
+                3. Diligencia los 3 campos obligatorios de entrega: <strong>Nombre del cliente</strong>, <strong>Celular</strong> y <strong>Dirección exacta y barrio</strong> (ej. <em>Edificio Bahía Chipichape Apto 402, El Rodadero</em>).<br>
+                4. En el selector <strong>"Motorizado"</strong>, deja la asignación automática al Domiciliario Principal o selecciona manualmente al repartidor que llevará la carrera.<br>
+                5. Haz clic en <strong>"Despachar motorizado"</strong>. En menos de 2 segundos la orden le caerá al celular del repartidor en su App Shipday Drive con la ruta GPS calculada.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECCIÓN 7: CALCULADORA DE CAMBIO Y TIRILLA TÉRMICA 80MM -->
+      <section id="calculadora-tirilla" class="manual-section">
+        <h2>
+          <span class="step-badge pos">Paso 7</span>
+          Calculadora de Cambio en Efectivo y Tirilla Térmica (80mm)
+        </h2>
+        <p style="color:var(--muted);margin:0;">
+          Herramientas nativas dentro del POS para agilizar la caja rápida y entregar cuentas claras a tus clientes en el mostrador.
+        </p>
+
+        <div class="step-list">
+          <div class="step-card">
+            <div class="step-num green">1</div>
+            <div class="step-body">
+              <h3>Calculadora de cambio con botones rápidos de billetes colombianos</h3>
+              <p>
+                Cuando seleccionas <strong>"Pago en Caja: Efectivo"</strong>, se activa automáticamente la caja de cálculo con botones de alta denominación:
+              </p>
+              <p>
+                • <code class="kbd">Exacto</code>: Marca que el cliente pagó la cuenta completa con la plata justa.<br>
+                • <code class="kbd">$50k</code>: Paga con billete de cincuenta mil pesos ($50.000 COP).<br>
+                • <code class="kbd">$100k</code>: Paga con billete de cien mil pesos ($100.000 COP).<br>
+                • <code class="kbd">$200k</code>: Paga con dos billetes de cien mil o un monto de $200.000 COP.<br>
+                • <strong>Casilla libre:</strong> También puedes escribir a mano cualquier valor en la casilla <em>"Efectivo recibido ($)"</em> (por ejemplo, si te da $70.000).<br>
+                • <strong>Resultado en tiempo real:</strong> En letras verdes grandes verás: <code class="kbd">Cambio a devolver: $XX.XXX</code> para no equivocarte al dar las vueltas en efectivo.
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-num green">2</div>
+            <div class="step-body">
+              <h3>Tirilla de venta en cuadro de diálogo nativo (<code class="kbd">&lt;dialog id="receipt-dialog"&gt;</code>)</h3>
+              <p>
+                Apenas tocas <strong>"Cobrar en mostrador"</strong> o <strong>"Despachar motorizado"</strong>, se abre al instante el cuadro de diálogo modal nativo con el recibo listo. Incluye:
+              </p>
+              <p>
+                • Encabezado con datos del local: <em>Mucadele Licores · Calle 11 # 24-36, Santa Marta · Tel: +57 301 515 3867</em>.<br>
+                • Número de orden oficial y fecha/hora exacta.<br>
+                • Desglose de botellas, cantidades y precios unitarios.<br>
+                • Subtotal, valor de domicilio y Total Cobrado.<br>
+                • Efectivo recibido y cambio devuelto al cliente.<br>
+                • Botón <strong>"Abrir Tracking GPS"</strong> (para despachos a domicilio) que te permite copiar el enlace de rastreo satelital y compartírselo al cliente por WhatsApp.
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-num green">3</div>
+            <div class="step-body">
+              <h3>Impresión térmica en papel estándar de 80mm (<code class="kbd">@media print</code>)</h3>
+              <p>
+                Pulsa el botón verde <strong>"Imprimir Recibo (80mm)"</strong>. El sistema activa el diálogo de impresión del navegador, configurado automáticamente para papel térmico de 78-80mm. Todos los menús, botones y fondos se ocultan en la impresión para que la tirilla salga limpia, nítida y económica en la impresora térmica de mostrador.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECCIÓN 8: CIERRE DE TURNO Y ARQUEO DE CAJA -->
+      <section id="arqueo" class="manual-section">
+        <h2>
+          <span class="step-badge">Paso 8</span>
+          Cierre de Turno y Arqueo de Caja (Reporte CSV)
+        </h2>
+        <p style="color:var(--muted);margin:0;">
+          Al finalizar la noche o el turno diurno, no necesitas sumar recibos a mano ni hacer cuentas en un papel:
+        </p>
+
+        <div class="step-list">
+          <div class="step-card">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <h3>Abrir el panel de arqueo de turno</h3>
+              <p>
+                En la barra superior de la Caja POS, haz clic en el botón <strong>"Pedidos y Arqueo"</strong> (verás al lado un número con las ventas del turno). Se abrirá el modal nativo con 3 tarjetas resumen:
+              </p>
+              <p>
+                • <strong>Ventas Turno Local:</strong> Suma total de dinero vendido durante el turno.<br>
+                • <strong>Efectivo en Caja:</strong> El dinero físico exacto en billetes y monedas que el cajero saliente debe entregar físicamente en el sobre de seguridad.<br>
+                • <strong>Nequi / Tarjeta:</strong> Dinero que entró a cuentas bancarias o transacciones por datáfono.
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <h3>Exportar el Cierre de Caja en formato CSV (Excel)</h3>
+              <p>
+                Dentro del mismo modal de arqueo, pulsa el botón <strong>"Exportar Cierre CSV"</strong>. El sistema descargará un archivo llamado <code class="kbd">cierre-caja-mucadele-[FECHA].csv</code> con el listado detallado de todas las ventas del turno. Puedes abrirlo directamente en Microsoft Excel o enviarlo por correo al propietario para control administrativo.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECCIÓN 9: PREGUNTAS FRECUENTES Y SOLUCIÓN RÁPIDA -->
+      <section id="preguntas" class="manual-section">
+        <h2>
+          <span class="step-badge">Paso 9</span>
+          Preguntas Frecuentes y Solución Rápida de Problemas en el Local
+        </h2>
+
+        <div class="warn-box">
+          <strong>❓ "Un cliente quiere comprar un licor en la página web pero le aparece como 'AGOTADO'"</strong><br>
+          <em>Causa:</em> El contador de inventario en la base de datos llegó a 0 unidades físicas.<br>
+          <em>Solución:</em> Entra a <a href="/admin">/admin</a> → Pestaña 1 (<strong>1. Inventario y Productos</strong>), busca la fila del licor y pulsa el botón rápido <code class="kbd">+6</code> o <code class="kbd">+12</code> (o digita la cantidad en la casilla de stock y pulsa Enter). En menos de 1 segundo el botón volverá a estar verde y activo para los clientes en la web.
+        </div>
+
+        <div class="warn-box">
+          <strong>❓ "Cambié el precio de una botella en el Admin, ¿cuánto tarda en verse reflejado en la tienda?"</strong><br>
+          <em>Causa:</em> La sincronización en Cloudflare D1 es en tiempo real.<br>
+          <em>Solución:</em> Es instantáneo (menos de 1 segundo). Apenas pulsas el botón del disquete <code class="kbd">💾</code> al lado del nuevo precio, tanto la página web de clientes como la caja POS cobran de inmediato el nuevo valor.
+        </div>
+
+        <div class="warn-box">
+          <strong>❓ "El sistema me dice 'Demasiados intentos de inicio de sesión. Intente nuevamente en 15 minutos'"</strong><br>
+          <em>Causa:</em> Se digitó una contraseña errónea 5 veces consecutivas y el servidor activó la defensa contra fuerza bruta.<br>
+          <em>Solución:</em> Es una medida de protección automática. Debes esperar exactamente 15 minutos para que el bloqueo se levante solo. Luego, escribe la clave usando la opción verde <strong>"Mostrar"</strong> para asegurarte de que no haya errores de digitación.
+        </div>
+
+        <div class="warn-box">
+          <strong>❓ "El Domiciliario Principal no vino a trabajar hoy y los pedidos web le están cayendo a su celular"</strong><br>
+          <em>Solución en 10 segundos:</em> Entra al <a href="/admin">Panel Admin</a> → Pestaña 3 (<strong>3. Domiciliarios (Shipday)</strong>), busca el nombre del motorizado que está trabajando hoy y haz clic sobre el botón <strong>"Fijar como Principal"</strong>. A partir de ese clic, todas las compras de la web se le asignarán automáticamente al nuevo motorizado.
+        </div>
+
+        <div class="warn-box">
+          <strong>❓ "Llegó el camión distribuidor con varias cajas de cerveza y licor, ¿tengo que sumarlas una a una?"</strong><br>
+          <em>Solución ágil:</em> Si tenías una orden de compra pendiente generada por stock mínimo, ve a la Pestaña 2 (<strong>2. Proveedores y Pedidos por Stock Mínimo</strong>) y haz clic en <strong>"📥 Recibir Mercancía (+Sumar al Stock)"</strong>. Todas las botellas se sumarán solas. Si compraste mercancía extraordinaria que no estaba en orden previa, ve a la Pestaña 1 y usa los botones rápidos <code class="kbd">+6</code> o <code class="kbd">+12</code> en cada fila.
+        </div>
+
+        <div class="warn-box">
+          <strong>❓ "Se fue la luz momentáneamente en el local o se desconectó el WiFi"</strong><br>
+          <em>Solución:</em> La plataforma funciona en la nube en Cloudflare Edge. Puedes abrir inmediatamente <code class="kbd">mucadele.com.co/pos</code> desde cualquier celular inteligente con datos móviles (Android o iPhone), iniciar sesión con tus credenciales de superadmin y continuar cobrando y despachando sin interrumpir la operación del negocio.
+        </div>
+
+        <div class="tip-box">
+          <strong>📞 Soporte y Localización del Establecimiento:</strong><br>
+          • <strong>Razón Comercial:</strong> Mucadele Licores<br>
+          • <strong>Dirección Sede:</strong> Calle 11 # 24-36, Comuna 3, Santa Marta, Magdalena, Colombia.<br>
+          • <strong>Línea de Pedidos WhatsApp:</strong> +57 301 515 3867<br>
+          • <strong>Coordenadas GPS del Local:</strong> Lat 11.24383, Long -74.186437
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+</body>
+</html>

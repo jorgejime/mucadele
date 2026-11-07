@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="es-CO">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clientes y Cartera · Mucadele Licores</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/pos.css?v=20261107v3">
+  <style>
+    .customers-shell {
+      max-width: 1280px;
+      margin: 1.5rem auto;
+      padding: 0 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+    .customers-kpis {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+    }
+    .kpi-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .kpi-card span {
+      font-size: 0.82rem;
+      color: var(--muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .kpi-card strong {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--text);
+    }
+    .kpi-danger {
+      color: var(--danger) !important;
+    }
+    .kpi-action {
+      color: var(--action) !important;
+    }
+    .customers-toolbar {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .search-box {
+      flex: 1;
+      min-width: 260px;
+      position: relative;
+    }
+    .search-box input {
+      width: 100%;
+      height: 44px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0 0.85rem 0 2.2rem;
+      font-family: inherit;
+      font-size: 0.95rem;
+      background: var(--surface);
+    }
+    .search-box input:focus {
+      outline: none;
+      border-color: var(--action);
+      background: #FFF;
+    }
+    .search-icon {
+      position: absolute;
+      left: 0.75rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+      pointer-events: none;
+    }
+    .filter-pills {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+    }
+    .filter-btn {
+      height: 40px;
+      padding: 0 1rem;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.85rem;
+      font-weight: 700;
+      border-radius: 8px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: all 0.15s ease;
+    }
+    .filter-btn.active {
+      background: var(--text);
+      color: #FFF;
+      border-color: var(--text);
+    }
+    .customer-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      transition: border-color 0.15s ease;
+    }
+    .customer-card.has-debt {
+      border-left: 5px solid var(--danger);
+      background: #FFFDFC;
+    }
+    .customer-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .customer-meta h3 {
+      margin: 0 0 0.25rem 0;
+      font-size: 1.15rem;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 800;
+      padding: 0.2rem 0.55rem;
+      border-radius: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .badge-vip {
+      background: #FEF3C7;
+      color: #92400E;
+      border: 1px solid #FCD34D;
+    }
+    .badge-recurring {
+      background: #E0E7FF;
+      color: #3730A3;
+      border: 1px solid #C7D2FE;
+    }
+    .badge-new {
+      background: #F3F4F6;
+      color: #4B5563;
+      border: 1px solid #E5E7EB;
+    }
+    .customer-subtext {
+      font-size: 0.88rem;
+      color: var(--muted);
+      display: flex;
+      gap: 0.85rem;
+      flex-wrap: wrap;
+    }
+    .customer-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 0.75rem;
+      background: var(--surface);
+      border-radius: 10px;
+      padding: 0.75rem 1rem;
+    }
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+    }
+    .stat-label {
+      font-size: 0.76rem;
+      color: var(--muted);
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .stat-val {
+      font-size: 1.05rem;
+      font-weight: 800;
+    }
+    .stat-val-debt {
+      color: var(--danger);
+    }
+    .customer-actions {
+      display: flex;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .btn-wa {
+      background: #25D366;
+      color: #FFF;
+      border: 1px solid #25D366;
+      font-weight: 700;
+      border-radius: 8px;
+      padding: 0 1rem;
+      height: 42px;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      text-decoration: none;
+      font-size: 0.88rem;
+    }
+    .btn-wa:hover {
+      background: #1EBE5D;
+    }
+    .btn-settle {
+      background: var(--action);
+      color: #FFF;
+      border: 1px solid var(--action);
+      font-weight: 700;
+      border-radius: 8px;
+      padding: 0 1rem;
+      height: 42px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.88rem;
+    }
+    .btn-settle:hover {
+      background: var(--action-active);
+    }
+    .btn-details {
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      font-weight: 600;
+      border-radius: 8px;
+      padding: 0 0.85rem;
+      height: 42px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    .orders-accordion {
+      border-top: 1px dashed var(--border);
+      padding-top: 0.85rem;
+      margin-top: 0.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .order-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.5rem 0.75rem;
+      background: #FFF;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.88rem;
+      flex-wrap: wrap;
+    }
+    .order-pending-badge {
+      background: #FEE2E2;
+      color: #991B1B;
+      padding: 0.15rem 0.5rem;
+      border-radius: 6px;
+      font-weight: 800;
+      font-size: 0.75rem;
+    }
+    .order-paid-badge {
+      background: #DCFCE7;
+      color: #166534;
+      padding: 0.15rem 0.5rem;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 0.75rem;
+    }
+    /* Modal de Liquidación */
+    dialog.pos-dialog {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+      max-width: 520px;
+      width: 95%;
+      padding: 1.5rem;
+      background: #FFF;
+    }
+    dialog::backdrop {
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(3px);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Topbar -->
+  <header class="pos-header">
+    <div class="pos-brand">
+      <span class="pos-badge">MUCADELE</span>
+      <h1>Gestión de Clientes Recurrentes y Cartera a Crédito</h1>
+    </div>
+
+    <div class="pos-actions">
+      <a href="/pos" class="btn-outline btn-pos-link" style="border-color:var(--brand-gold);font-weight:700;">
+        🖥️ Ir a Caja POS
+      </a>
+      <a href="/admin" class="btn-outline">
+        ⚙️ Panel Admin
+      </a>
+      <a href="/manual" class="btn-outline">
+        📖 Manual
+      </a>
+      <a href="/" class="btn-outline">
+        Tienda Web
+      </a>
+      <a href="/api/logout?next=/clientes" class="btn-outline">
+        Cerrar sesión
+      </a>
+    </div>
+  </header>
+
+  <main class="customers-shell">
+    <!-- KPIs Generales -->
+    <section class="customers-kpis" aria-label="Métricas de clientes y cartera">
+      <div class="kpi-card">
+        <span>Total Clientes Registrados</span>
+        <strong id="kpi-total-customers">0</strong>
+      </div>
+      <div class="kpi-card">
+        <span>Clientes Recurrentes / VIP</span>
+        <strong id="kpi-frequent-customers" class="kpi-action">0</strong>
+      </div>
+      <div class="kpi-card">
+        <span>Clientes con Crédito Activo</span>
+        <strong id="kpi-debtors-count" class="kpi-danger">0</strong>
+      </div>
+      <div class="kpi-card">
+        <span>Cartera Total por Cobrar</span>
+        <strong id="kpi-total-debt" class="kpi-danger">$0</strong>
+      </div>
+    </section>
+
+    <!-- Barra de Búsqueda y Filtros -->
+    <section class="customers-toolbar">
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input type="search" id="customer-search-input" placeholder="Buscar cliente por nombre, teléfono o documento/NIT..." autocomplete="off">
+      </div>
+      <div class="filter-pills">
+        <button type="button" class="filter-btn active" data-filter="all" id="filter-all-btn">
+          Todos (<span id="count-all">0</span>)
+        </button>
+        <button type="button" class="filter-btn" data-filter="debtors" id="filter-debtors-btn" style="color:var(--danger);">
+          🔴 Con Deuda (<span id="count-debtors">0</span>)
+        </button>
+        <button type="button" class="filter-btn" data-filter="frequent" id="filter-frequent-btn">
+          ⭐ Recurrentes / VIP (<span id="count-frequent">0</span>)
+        </button>
+        <button type="button" class="filter-btn" id="refresh-customers-btn" title="Refrescar datos en vivo">
+          🔄 Actualizar
+        </button>
+      </div>
+    </section>
+
+    <!-- Listado Dinámico de Clientes -->
+    <section id="customers-list-container" style="display:flex;flex-direction:column;gap:1rem;">
+      <p style="text-align:center;color:var(--muted);padding:2rem 0;">Cargando clientes y cartera desde Cloudflare D1...</p>
+    </section>
+  </main>
+
+  <!-- Modal para Liquidar / Abonar Crédito -->
+  <dialog id="settle-credit-dialog" class="pos-dialog">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+      <h3 style="margin:0;font-size:1.25rem;">Liquidar Crédito de Cliente</h3>
+      <button type="button" id="close-settle-dialog-btn" style="background:none;border:none;font-size:1.4rem;cursor:pointer;">&times;</button>
+    </div>
+    <div id="settle-dialog-content" style="display:flex;flex-direction:column;gap:1rem;">
+      <!-- Dinámico -->
+    </div>
+  </dialog>
+
+  <script src="/clientes.js?v=20261107v1"></script>
+</body>
+</html>

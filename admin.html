@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="es-CO">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel Admin · Mucadele Licores (Inventario, Productos y Domiciliarios)</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/pos.css?v=20261107v2">
+</head>
+<body>
+
+  <!-- Topbar Admin (Solo accesible tras autenticación en servidor) -->
+  <header class="pos-header">
+    <div class="pos-brand">
+      <span class="pos-badge pos-badge-admin">SUPERADMIN</span>
+      <h1>Control Mucadele · Inventario, Catálogo y Domiciliarios</h1>
+    </div>
+
+    <div class="pos-actions">
+      <a href="/clientes" class="btn-outline" style="border-color:var(--brand-gold);font-weight:700;">
+        👥 Clientes y Cartera
+      </a>
+      <a href="/pos" class="btn-outline btn-pos-link">
+        🖥️ Ir a Caja POS
+      </a>
+      <a href="/manual" class="btn-outline btn-manual-link">
+        📖 Manual Operativo
+      </a>
+      <a href="/" class="btn-outline">Ver Tienda Pública</a>
+      <a href="/api/logout?next=/admin" class="btn-outline">Cerrar sesión</a>
+    </div>
+  </header>
+
+  <main class="admin-shell">
+    <!-- KPIs de Inventario -->
+    <section class="admin-kpis" aria-label="Resumen de inventario">
+      <div class="admin-kpi-card">
+        <span>Productos en Catálogo</span>
+        <strong id="kpi-prod-count">0</strong>
+      </div>
+      <div class="admin-kpi-card">
+        <span>Unidades Totales en Bodega</span>
+        <strong id="kpi-total-units">0</strong>
+      </div>
+      <div class="admin-kpi-card">
+        <span>Valorización Inventario (COP)</span>
+        <strong id="kpi-inventory-value" class="admin-kpi-action">$0</strong>
+      </div>
+      <div class="admin-kpi-card">
+        <span>Alertas Stock Bajo / Agotado</span>
+        <strong id="kpi-low-stock" class="admin-kpi-warning">0</strong>
+      </div>
+    </section>
+
+    <!-- Navegación por Pestañas -->
+    <nav class="admin-tabs" role="tablist" aria-label="Secciones de administración">
+      <button type="button" class="admin-tab-btn" role="tab" data-tab="inventory" aria-selected="true">
+        1. Inventario y Productos
+      </button>
+      <button type="button" class="admin-tab-btn" role="tab" data-tab="suppliers" aria-selected="false">
+        2. Proveedores y Pedidos por Stock Mínimo
+      </button>
+      <button type="button" class="admin-tab-btn" role="tab" data-tab="carriers" aria-selected="false">
+        3. Domiciliarios (Shipday)
+      </button>
+      <button type="button" class="admin-tab-btn" role="tab" data-tab="orders" aria-selected="false">
+        4. Historial de Ventas y Despachos
+      </button>
+      <a href="/clientes" class="admin-tab-btn" style="text-decoration:none;display:inline-flex;align-items:center;color:inherit;font-weight:700;">
+        5. 👥 Clientes y Cartera
+      </a>
+    </nav>
+
+    <!-- SECCIÓN 1: INVENTARIO Y PRODUCTOS -->
+    <section id="tab-inventory" class="admin-card">
+      <div class="admin-toolbar">
+        <div class="admin-search-group">
+          <input
+            type="search"
+            id="admin-search"
+            class="pos-search admin-search-input"
+            placeholder="Buscar producto por nombre o categoría..."
+          >
+          <select id="admin-cat-filter" class="btn-outline admin-select-filter">
+            <option value="todos">Todas las categorías</option>
+            <option value="whisky">Whisky</option>
+            <option value="aguardiente-ron">Aguardiente y Ron</option>
+            <option value="cervezas">Cervezas</option>
+            <option value="otros">Tequila, Vodka, Hielo y Pasantes</option>
+          </select>
+        </div>
+        <button type="button" id="open-new-product-btn" class="pos-charge-btn btn-create-prod">
+          + Crear Nuevo Producto
+        </button>
+      </div>
+
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Producto / Proveedor</th>
+              <th>Precio Venta (COP)</th>
+              <th>Inventario (Stock Actual)</th>
+              <th>Punto de Pedido (Mín. / A Pedir)</th>
+              <th>Estado y Reabastecimiento</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="admin-products-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- SECCIÓN 2: PROVEEDORES Y REABASTECIMIENTO PROGRAMADO -->
+    <section id="tab-suppliers" class="admin-card" hidden>
+      <!-- Panel Superior: Reabastecimiento Automático por Stock Mínimo -->
+      <div class="admin-panel-callout">
+        <div class="admin-section-header">
+          <div>
+            <h2 class="admin-section-title">📦 Pedidos Automáticos Programados por Stock Mínimo</h2>
+            <p class="admin-section-desc">
+              Cuando un producto baja o iguala la cantidad mínima que programaste, el sistema genera automáticamente la orden de compra a su proveedor y te permite enviarla por WhatsApp o recibir la mercancía en 1 clic.
+            </p>
+          </div>
+          <button type="button" id="refresh-suppliers-btn" class="btn-outline">Actualizar</button>
+        </div>
+
+        <!-- Productos actualmente en/bajo stock mínimo -->
+        <div id="low-stock-alerts-box" class="admin-alerts-box"></div>
+
+        <!-- Órdenes de Compra Activas e Historial -->
+        <h3 class="admin-section-subtitle">Órdenes de Compra a Proveedores (Activas y Recibidas)</h3>
+        <div id="purchase-orders-container" class="admin-grid-list"></div>
+      </div>
+
+      <!-- Panel Inferior: Directorio de Proveedores + Formulario de Nuevo Proveedor -->
+      <div class="admin-two-cols">
+        <div>
+          <h2 class="admin-section-title">Directorio de Proveedores y Distribuidoras</h2>
+          <p class="admin-section-desc">
+            Asigna estos proveedores a tus productos para automatizar los pedidos de reposición.
+          </p>
+          <div id="suppliers-list-container" class="admin-grid-list"></div>
+        </div>
+
+        <div class="admin-form-card">
+          <h3 class="admin-section-subtitle">+ Registrar Nuevo Proveedor</h3>
+          <p class="admin-section-desc">
+            Registra la distribuidora y el WhatsApp del preventista para despachar órdenes de reabastecimiento automáticas.
+          </p>
+          <form id="new-supplier-form" class="admin-form">
+            <input type="hidden" id="supplier-edit-id">
+            <div class="admin-form-group">
+              <label for="supplier-name" class="admin-form-label">Empresa / Distribuidora *</label>
+              <input
+                type="text"
+                id="supplier-name"
+                required
+                placeholder="Ej. Dislicores / Bavaria / Distribuidora El Faro"
+                class="admin-form-input"
+              >
+            </div>
+            <div class="admin-form-group">
+              <label for="supplier-contact" class="admin-form-label">Nombre del Preventista / Vendedor</label>
+              <input
+                type="text"
+                id="supplier-contact"
+                placeholder="Ej. Andrés Gómez (Asesor Ruta)"
+                class="admin-form-input"
+              >
+            </div>
+            <div class="admin-form-group">
+              <label for="supplier-phone" class="admin-form-label">Celular / WhatsApp de Pedidos (10 dígitos) *</label>
+              <input
+                type="tel"
+                id="supplier-phone"
+                inputmode="tel"
+                required
+                placeholder="Ej. 3015153867"
+                class="admin-form-input"
+              >
+            </div>
+            <div class="admin-form-group">
+              <label for="supplier-days" class="admin-form-label">Días de Visita o Entrega</label>
+              <input
+                type="text"
+                id="supplier-days"
+                placeholder="Ej. Martes y Viernes"
+                class="admin-form-input"
+              >
+            </div>
+            <button type="submit" id="save-supplier-btn" class="pos-charge-btn btn-form-submit">
+              Guardar Proveedor
+            </button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECCIÓN 3: DOMICILIARIOS (SHIPDAY) -->
+    <section id="tab-carriers" class="admin-card" hidden>
+      <div class="admin-two-cols">
+        <!-- Lista de domiciliarios -->
+        <div>
+          <div class="admin-section-header">
+            <div>
+              <h2 class="admin-section-title">Flota de Domiciliarios Activos</h2>
+              <p class="admin-section-desc">Conectado en tiempo real con Shipday Dispatch.</p>
+            </div>
+            <button type="button" id="refresh-carriers-btn" class="btn-outline">Actualizar</button>
+          </div>
+          <div id="carriers-list-container" class="admin-grid-list"></div>
+        </div>
+
+        <!-- Formulario para crear domiciliario -->
+        <div class="admin-form-card">
+          <h3 class="admin-section-subtitle">+ Registrar Nuevo Domiciliario</h3>
+          <p class="admin-section-desc">
+            Al crear un domiciliario aquí, se da de alta en <strong>Shipday</strong> y queda disponible para asignarle pedidos web y de mostrador.
+          </p>
+          <form id="new-carrier-form" class="admin-form">
+            <div class="admin-form-group">
+              <label for="carrier-name" class="admin-form-label">Nombre Completo del Motorizado *</label>
+              <input
+                type="text"
+                id="carrier-name"
+                required
+                placeholder="Ej. Carlos Mendoza"
+                class="admin-form-input"
+              >
+            </div>
+            <div class="admin-form-group">
+              <label for="carrier-phone" class="admin-form-label">Celular / WhatsApp (10 dígitos) *</label>
+              <input
+                type="tel"
+                id="carrier-phone"
+                inputmode="tel"
+                required
+                placeholder="Ej. 3001234567"
+                class="admin-form-input"
+              >
+            </div>
+            <div class="admin-form-group">
+              <label for="carrier-email" class="admin-form-label">Correo Electrónico (Para App Shipday Drive)</label>
+              <input
+                type="email"
+                id="carrier-email"
+                placeholder="Ej. carlos@mucadele.com.co"
+                class="admin-form-input"
+              >
+            </div>
+            <label class="admin-checkbox-row">
+              <input type="checkbox" id="carrier-is-default" class="admin-checkbox-input">
+              Fijar como domiciliario principal (auto-asignar pedidos nuevos)
+            </label>
+            <button type="submit" id="create-carrier-btn" class="pos-charge-btn btn-form-submit">
+              Guardar y Sincronizar con Shipday
+            </button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECCIÓN 4: HISTORIAL DE PEDIDOS Y DESPACHOS -->
+    <section id="tab-orders" class="admin-card" hidden>
+      <div class="admin-section-header">
+        <div>
+          <h2 class="admin-section-title">Órdenes Activas e Historial de Ventas</h2>
+          <p class="admin-section-desc">
+            Auditoría de ventas por método de pago real, estado de cobro y cuentas por cobrar.
+          </p>
+        </div>
+        <div class="admin-actions-group">
+          <button type="button" id="refresh-admin-orders-btn" class="btn-outline">Actualizar</button>
+          <button type="button" id="export-admin-orders-btn" class="btn-outline">Descargar Excel (CSV)</button>
+        </div>
+      </div>
+
+      <!-- KPIs de ventas por método en Panel Admin -->
+      <div class="kpi-row" style="margin-bottom:1rem;grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));">
+        <div class="kpi-card">
+          <span>Facturación Total</span>
+          <strong id="admin-kpi-total">$0</strong>
+        </div>
+        <div class="kpi-card">
+          <span>Efectivo</span>
+          <strong id="admin-kpi-cash" style="color:var(--action);">$0</strong>
+        </div>
+        <div class="kpi-card">
+          <span>Tarjetas</span>
+          <strong id="admin-kpi-card">$0</strong>
+        </div>
+        <div class="kpi-card">
+          <span>Transferencias</span>
+          <strong id="admin-kpi-transfer">$0</strong>
+        </div>
+        <div class="kpi-card">
+          <span>Cartera Crédito</span>
+          <strong id="admin-kpi-credit" style="color:var(--danger);">$0</strong>
+        </div>
+      </div>
+
+      <!-- Filtros por método de pago y estado de cobro -->
+      <div style="display:flex;gap:0.75rem;align-items:center;margin-bottom:1rem;flex-wrap:wrap;">
+        <select id="admin-orders-filter-payment" class="btn-outline" style="min-width:200px;">
+          <option value="all">Todos los métodos de pago</option>
+          <option value="efectivo">Efectivo</option>
+          <option value="tarjeta_credito">Tarjeta de Crédito</option>
+          <option value="tarjeta_debito">Tarjeta Débito</option>
+          <option value="transferencia">Transferencia</option>
+          <option value="combinado">Combinado</option>
+          <option value="credito">A CRÉDITO</option>
+          <option value="otros">Otros Métodos</option>
+        </select>
+        <select id="admin-orders-filter-status" class="btn-outline">
+          <option value="all">Todos los estados</option>
+          <option value="paid">Pagado</option>
+          <option value="pending">Pendiente por cobrar</option>
+        </select>
+      </div>
+
+      <div id="admin-orders-list" class="admin-grid-list"></div>
+    </section>
+  </main>
+
+  <!-- Modal Crear / Editar Producto -->
+  <dialog id="product-dialog" closedby="any">
+    <div class="dialog-head">
+      <h2 id="product-dialog-title">Nuevo Producto</h2>
+      <button type="button" id="close-product-dialog" class="btn-outline">Cerrar</button>
+    </div>
+    <div class="dialog-body">
+      <form id="product-form" class="admin-dialog-form">
+        <input type="hidden" id="prod-id">
+
+        <div class="admin-form-group">
+          <label for="prod-name" class="admin-form-label">Nombre del Producto *</label>
+          <input
+            type="text"
+            id="prod-name"
+            required
+            placeholder="Ej. Whisky Old Parr 12 Años"
+            class="admin-form-input"
+          >
+        </div>
+
+        <div class="form-row-2col">
+          <div class="admin-form-group">
+            <label for="prod-presentation" class="admin-form-label">Presentación / Tamaño *</label>
+            <input
+              type="text"
+              id="prod-presentation"
+              required
+              placeholder="Ej. 750 ml / Six Pack"
+              class="admin-form-input"
+            >
+          </div>
+          <div class="admin-form-group">
+            <label for="prod-category" class="admin-form-label">Categoría *</label>
+            <select
+              id="prod-category"
+              required
+              class="admin-form-select"
+            >
+              <option value="whisky">Whisky</option>
+              <option value="aguardiente-ron">Aguardiente y Ron</option>
+              <option value="cervezas">Cervezas</option>
+              <option value="otros">Tequila, Vodka, Hielo y Pasantes</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row-2col">
+          <div class="admin-form-group">
+            <label for="prod-price" class="admin-form-label">Precio de Venta (COP) *</label>
+            <input
+              type="number"
+              id="prod-price"
+              required
+              min="500"
+              step="500"
+              placeholder="Ej. 155000"
+              class="admin-form-input"
+            >
+          </div>
+          <div class="admin-form-group">
+            <label for="prod-stock" class="admin-form-label">Stock Actual (Unidades) *</label>
+            <input
+              type="number"
+              id="prod-stock"
+              required
+              min="0"
+              step="1"
+              placeholder="Ej. 24"
+              class="admin-form-input"
+            >
+          </div>
+        </div>
+
+        <div class="admin-subcard">
+          <div class="admin-subcard-title">
+            📦 Programación de Pedido Automático a Proveedor
+          </div>
+          <div class="admin-form-group">
+            <label for="prod-supplier" class="admin-form-label">Proveedor Asignado</label>
+            <select
+              id="prod-supplier"
+              class="admin-form-select"
+            >
+              <option value="">-- Seleccionar proveedor --</option>
+            </select>
+          </div>
+          <div class="form-row-2col">
+            <div class="admin-form-group">
+              <label for="prod-min-stock" class="admin-form-label">Pedir cuando el stock baje a:</label>
+              <input
+                type="number"
+                id="prod-min-stock"
+                required
+                min="0"
+                step="1"
+                value="6"
+                class="admin-form-input admin-input-compact"
+              >
+            </div>
+            <div class="admin-form-group">
+              <label for="prod-reorder-qty" class="admin-form-label">Unidades a pedir al proveedor:</label>
+              <input
+                type="number"
+                id="prod-reorder-qty"
+                required
+                min="1"
+                step="1"
+                value="12"
+                class="admin-form-input admin-input-compact"
+              >
+            </div>
+          </div>
+        </div>
+
+        <div class="admin-form-group">
+          <label for="prod-image" class="admin-form-label">URL de Fotografía del Producto *</label>
+          <input
+            type="url"
+            id="prod-image"
+            required
+            placeholder="https://..."
+            class="admin-form-input"
+          >
+          <span class="form-help-text">
+            Puede pegar la dirección de cualquier imagen web o elegir una plantilla rápida abajo:
+          </span>
+          <div class="preset-img-group">
+            <button type="button" class="stock-btn preset-img-btn" data-img="https://olimpica.vteximg.com.br/arquivos/ids/2492092/5000281003160_cd5cdf6c25ec4403ad9ca386feedb1cd.webp">Foto Whisky</button>
+            <button type="button" class="stock-btn preset-img-btn" data-img="https://olimpica.vteximg.com.br/arquivos/ids/1852397/7702049000531.jpg.jpg">Foto Guaro</button>
+            <button type="button" class="stock-btn preset-img-btn" data-img="https://olimpica.vteximg.com.br/arquivos/ids/1853195/7702049101207.jpg.jpg">Foto Ron</button>
+            <button type="button" class="stock-btn preset-img-btn" data-img="https://olimpica.vteximg.com.br/arquivos/ids/1240194/Club-Colombia-Dorada.png">Foto Cerveza</button>
+            <button type="button" class="stock-btn preset-img-btn" data-img="https://olimpica.vteximg.com.br/arquivos/ids/1431489/7702090020847.jpg">Foto Hielo/Soda</button>
+          </div>
+        </div>
+
+        <label class="admin-checkbox-row">
+          <input type="checkbox" id="prod-active" checked class="admin-checkbox-input">
+          Producto visible y disponible en la tienda web
+        </label>
+
+        <div class="admin-actions-group">
+          <button type="submit" id="save-product-btn" class="pos-charge-btn btn-form-submit">
+            Guardar Producto
+          </button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <div id="admin-toast" class="toast-banner" hidden>Cambios guardados</div>
+
+  <script>
+    // Soporte de Light-Dismiss (cerrar al hacer clic en el backdrop) para diálogos nativos
+    document.querySelectorAll('dialog[closedby="any"]').forEach((dialog) => {
+      dialog.addEventListener('click', (event) => {
+        if (event.target !== dialog) return;
+        const rect = dialog.getBoundingClientRect();
+        const inside =
+          rect.top <= event.clientY &&
+          event.clientY <= rect.top + rect.height &&
+          rect.left <= event.clientX &&
+          event.clientX <= rect.left + rect.width;
+        if (!inside) dialog.close();
+      });
+    });
+  </script>
+  <script type="module" src="/admin.js?v=20261107v2"></script>
+</body>
+</html>
