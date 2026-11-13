@@ -3360,6 +3360,618 @@ async function handleShipdayWebhook(request, env) {
   return jsonResponse({ ok: true, received: true, status });
 }
 
+// ============================================================================
+// SUBSISTEMA DE FACTURACIÓN ELECTRÓNICA DIAN UBL 2.1 (SOFTWARE PROPIO)
+// ============================================================================
+
+/**
+ * Calcula el Código Único de Factura Electrónica (CUFE) según Anexo Técnico 1.9 DIAN.
+ * Algoritmo: SHA-384
+ * CUFE = SHA-384(NumFac + FecFac + HorFac + ValFac + CodImp1 + ValImp1 + CodImp2 + ValImp2 + CodImp3 + ValImp3 + ValTot + NitOfe + NumAdq + ClTec + TipoAmb)
+ */
+async function calculateCUFE({
+  numFac,
+  fecFac,
+  horFac,
+  valFac,
+  codImp1 = '01',
+  valImp1 = 0,
+  codImp2 = '04',
+  valImp2 = 0,
+  codImp3 = '03',
+  valImp3 = 0,
+  valTot,
+  nitOfe,
+  numAdq,
+  clTec,
+  tipoAmb = '2',
+}) {
+  const vFac = Number(valFac || 0).toFixed(2);
+  const vImp1 = Number(valImp1 || 0).toFixed(2);
+  const vImp2 = Number(valImp2 || 0).toFixed(2);
+  const vImp3 = Number(valImp3 || 0).toFixed(2);
+  const vTot = Number(valTot || 0).toFixed(2);
+
+  const raw = `${numFac}${fecFac}${horFac}${vFac}${codImp1}${vImp1}${codImp2}${vImp2}${codImp3}${vImp3}${vTot}${nitOfe}${numAdq}${clTec}${tipoAmb}`;
+  const enc = new TextEncoder();
+  const digest = await crypto.subtle.digest('SHA-384', enc.encode(raw));
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/**
+ * Calcula el SoftwareSecurityCode según Anexo Técnico 1.9 DIAN.
+ * Algoritmo: SHA-384(SoftwareID + Pin + NumFac)
+ */
+async function calculateSoftwareSecurityCode(softwareId, pin, numFac) {
+  const raw = `${softwareId}${pin}${numFac}`;
+  const enc = new TextEncoder();
+  const digest = await crypto.subtle.digest('SHA-384', enc.encode(raw));
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/**
+ * Genera la cadena de datos estandarizada para el código QR DIAN.
+ */
+function buildDIANQRCode({
+  numFac,
+  fecFac,
+  horFac,
+  nitOfe,
+  numAdq,
+  valFac,
+  valIva = 0,
+  valOtroImp = 0,
+  valTot,
+  cufe,
+}) {
+  const vFac = Number(valFac || 0).toFixed(2);
+  const vIva = Number(valIva || 0).toFixed(2);
+  const vOtro = Number(valOtroImp || 0).toFixed(2);
+  const vTot = Number(valTot || 0).toFixed(2);
+  return `NumFac: ${numFac}\nFecFac: ${fecFac}\nHorFac: ${horFac}\nNitFac: ${nitOfe}\nDocAdq: ${numAdq}\nValFac: ${vFac}\nValIva: ${vIva}\nValOtroImp: ${vOtro}\nValTotal: ${vTot}\nCUFE: ${cufe}\nQRCode: https://catalogo-vpfe.dian.gov.co/document/searchqr?documentkey=${cufe}`;
+}
+
+/**
+ * Construye el documento XML UBL 2.1 canónico de la DIAN conforme al Anexo Técnico 1.9
+ */
+function buildUBL21InvoiceXML({ config, invoice, items, customer, securityCode }) {
+  const numFac = `${invoice.prefix}${invoice.consecutive}`;
+  const valFac = Number(invoice.subtotal).toFixed(2);
+  const valIva = Number(invoice.tax_iva || 0).toFixed(2);
+  const valTot = Number(invoice.total).toFixed(2);
+
+  const escapeXml = (str) =>
+    String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+
+  const lineItemsXml = (items || []).map((item, idx) => {
+    const lineNum = idx + 1;
+    const qty = Number(item.quantity || 1).toFixed(2);
+    const unitPrice = Number(item.price || item.unit_price || 0).toFixed(2);
+    const lineTotal = (Number(qty) * Number(unitPrice)).toFixed(2);
+    const itemName = escapeXml(item.name || item.product_name || `Producto #${lineNum}`);
+    const itemCode = escapeXml(item.id || item.product_id || `ITEM-${lineNum}`);
+
+    return `  <cac:InvoiceLine>
+    <cbc:ID>${lineNum}</cbc:ID>
+    <cbc:InvoicedQuantity unitCode="EA">${qty}</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount currencyID="COP">${lineTotal}</cbc:LineExtensionAmount>
+    <cac:TaxTotal>
+      <cbc:TaxAmount currencyID="COP">0.00</cbc:TaxAmount>
+      <cac:TaxSubtotal>
+        <cbc:TaxableAmount currencyID="COP">${lineTotal}</cbc:TaxableAmount>
+        <cbc:TaxAmount currencyID="COP">0.00</cbc:TaxAmount>
+        <cac:TaxCategory>
+          <cbc:Percent>0.00</cbc:Percent>
+          <cac:TaxScheme>
+            <cbc:ID>01</cbc:ID>
+            <cbc:Name>IVA</cbc:Name>
+          </cac:TaxScheme>
+        </cac:TaxCategory>
+      </cac:TaxSubtotal>
+    </cac:TaxTotal>
+    <cac:Item>
+      <cbc:Description>${itemName}</cbc:Description>
+      <cac:SellersItemIdentification>
+        <cbc:ID>${itemCode}</cbc:ID>
+      </cac:SellersItemIdentification>
+      <cac:StandardItemIdentification>
+        <cbc:ID schemeID="999">${itemCode}</cbc:ID>
+      </cac:StandardItemIdentification>
+    </cac:Item>
+    <cac:Price>
+      <cbc:PriceAmount currencyID="COP">${unitPrice}</cbc:PriceAmount>
+      <cbc:BaseQuantity unitCode="EA">1.00</cbc:BaseQuantity>
+    </cac:Price>
+  </cac:InvoiceLine>`;
+  }).join('\n');
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+  xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+  xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
+  xmlns:ds="http://www.w3.org/2000/09/xmldsig#"
+  xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
+  xmlns:sts="dian:gov:co:facturaelectronica:Structures-2-1"
+  xmlns:xades="http://uri.etsi.org/01903/v1.3.2#"
+  xmlns:xades141="http://uri.etsi.org/01903/v1.4.1#"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2 http://docs.oasis-open.org/ubl/os-UBL-2.1/xsd/maindoc/UBL-Invoice-2.1.xsd">
+  <ext:UBLExtensions>
+    <ext:UBLExtension>
+      <ext:ExtensionContent>
+        <sts:DianExtensions>
+          <sts:InvoiceControl>
+            <sts:InvoiceAuthorization>${escapeXml(config.resolution_number)}</sts:InvoiceAuthorization>
+            <sts:AuthorizationPeriod>
+              <cbc:StartDate>${escapeXml(config.resolution_date)}</cbc:StartDate>
+              <cbc:EndDate>${escapeXml(config.valid_until)}</cbc:EndDate>
+            </sts:AuthorizationPeriod>
+            <sts:AuthorizedInvoices>
+              <sts:Prefix>${escapeXml(config.prefix)}</sts:Prefix>
+              <sts:From>${config.range_from}</sts:From>
+              <sts:To>${config.range_to}</sts:To>
+            </sts:AuthorizedInvoices>
+          </sts:InvoiceControl>
+          <sts:InvoiceSource>
+            <cbc:IdentificationCode listAgencyID="6" listAgencyName="United Nations Economic Commission for Europe" listSchemeURI="urn:oasis:names:specification:ubl:codelist:gc:CountryIdentificationCode-2.1">CO</cbc:IdentificationCode>
+          </sts:InvoiceSource>
+          <sts:SoftwareProvider>
+            <sts:ProviderID schemeAgencyID="195" schemeAgencyName="CO, DIAN (Dirección de Impuestos y Aduanas Nacionales)" schemeID="${escapeXml(config.issuer_dv)}" schemeName="31">${escapeXml(config.issuer_nit)}</sts:ProviderID>
+            <sts:SoftwareID schemeAgencyID="195" schemeAgencyName="CO, DIAN (Dirección de Impuestos y Aduanas Nacionales)">${escapeXml(config.software_id)}</sts:SoftwareID>
+          </sts:SoftwareProvider>
+          <sts:SoftwareSecurityCode schemeAgencyID="195" schemeAgencyName="CO, DIAN (Dirección de Impuestos y Aduanas Nacionales)">${escapeXml(securityCode)}</sts:SoftwareSecurityCode>
+          <sts:AuthorizationProvider>
+            <sts:AuthorizationProviderID schemeAgencyID="195" schemeAgencyName="CO, DIAN (Dirección de Impuestos y Aduanas Nacionales)" schemeID="4" schemeName="31">800197268</sts:AuthorizationProviderID>
+          </sts:AuthorizationProvider>
+          <sts:QRCode>${escapeXml(invoice.qr_data)}</sts:QRCode>
+        </sts:DianExtensions>
+      </ext:ExtensionContent>
+    </ext:UBLExtension>
+  </ext:UBLExtensions>
+  <cbc:UBLVersionID>UBL 2.1</cbc:UBLVersionID>
+  <cbc:CustomizationID>10</cbc:CustomizationID>
+  <cbc:ProfileID>DIAN 2.1: Factura Electrónica de Venta</cbc:ProfileID>
+  <cbc:ProfileExecutionID>${escapeXml(config.environment)}</cbc:ProfileExecutionID>
+  <cbc:ID>${escapeXml(numFac)}</cbc:ID>
+  <cbc:UUID schemeID="${escapeXml(config.environment)}" schemeName="CUFE-SHA384">${escapeXml(invoice.cufe)}</cbc:UUID>
+  <cbc:IssueDate>${escapeXml(invoice.issue_date)}</cbc:IssueDate>
+  <cbc:IssueTime>${escapeXml(invoice.issue_time)}</cbc:IssueTime>
+  <cbc:InvoiceTypeCode>01</cbc:InvoiceTypeCode>
+  <cbc:Note>Factura Electrónica generada por Software Propio Mucadele ERP POS</cbc:Note>
+  <cbc:DocumentCurrencyCode>COP</cbc:DocumentCurrencyCode>
+  <cbc:LineCountNumeric>${items ? items.length : 1}</cbc:LineCountNumeric>
+  <cac:AccountingSupplierParty>
+    <cbc:AdditionalAccountID>2</cbc:AdditionalAccountID>
+    <cac:Party>
+      <cac:PartyName>
+        <cbc:Name>${escapeXml(config.issuer_name)}</cbc:Name>
+      </cac:PartyName>
+      <cac:PhysicalLocation>
+        <cac:Address>
+          <cbc:ID>47001</cbc:ID>
+          <cbc:CityName>Santa Marta</cbc:CityName>
+          <cbc:CountrySubentity>Magdalena</cbc:CountrySubentity>
+          <cbc:CountrySubentityCode>47</cbc:CountrySubentityCode>
+          <cac:AddressLine>
+            <cbc:Line>${escapeXml(config.issuer_address)}</cbc:Line>
+          </cac:AddressLine>
+          <cac:Country>
+            <cbc:IdentificationCode>CO</cbc:IdentificationCode>
+            <cbc:Name languageID="es">Colombia</cbc:Name>
+          </cac:Country>
+        </cac:Address>
+      </cac:PhysicalLocation>
+      <cac:PartyTaxScheme>
+        <cbc:RegistrationName>${escapeXml(config.issuer_name)}</cbc:RegistrationName>
+        <cbc:CompanyID schemeAgencyID="195" schemeAgencyName="CO, DIAN (Dirección de Impuestos y Aduanas Nacionales)" schemeID="${escapeXml(config.issuer_dv)}" schemeName="31">${escapeXml(config.issuer_nit)}</cbc:CompanyID>
+        <cbc:TaxLevelCode listName="48">O-48</cbc:TaxLevelCode>
+        <cac:TaxScheme>
+          <cbc:ID>01</cbc:ID>
+          <cbc:Name>IVA</cbc:Name>
+        </cac:TaxScheme>
+      </cac:PartyTaxScheme>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>${escapeXml(config.issuer_name)}</cbc:RegistrationName>
+        <cbc:CompanyID schemeAgencyID="195" schemeAgencyName="CO, DIAN (Dirección de Impuestos y Aduanas Nacionales)" schemeID="${escapeXml(config.issuer_dv)}" schemeName="31">${escapeXml(config.issuer_nit)}</cbc:CompanyID>
+      </cac:PartyLegalEntity>
+      <cac:Contact>
+        <cbc:Telephone>${escapeXml(config.issuer_phone)}</cbc:Telephone>
+        <cbc:ElectronicMail>${escapeXml(config.issuer_email)}</cbc:ElectronicMail>
+      </cac:Contact>
+    </cac:Party>
+  </cac:AccountingSupplierParty>
+  <cac:AccountingCustomerParty>
+    <cbc:AdditionalAccountID>2</cbc:AdditionalAccountID>
+    <cac:Party>
+      <cac:PartyName>
+        <cbc:Name>${escapeXml(customer.name)}</cbc:Name>
+      </cac:PartyName>
+      <cac:PhysicalLocation>
+        <cac:Address>
+          <cbc:ID>47001</cbc:ID>
+          <cbc:CityName>Santa Marta</cbc:CityName>
+          <cbc:CountrySubentity>Magdalena</cbc:CountrySubentity>
+          <cbc:CountrySubentityCode>47</cbc:CountrySubentityCode>
+          <cac:AddressLine>
+            <cbc:Line>${escapeXml(customer.address || 'Santa Marta')}</cbc:Line>
+          </cac:AddressLine>
+          <cac:Country>
+            <cbc:IdentificationCode>CO</cbc:IdentificationCode>
+            <cbc:Name languageID="es">Colombia</cbc:Name>
+          </cac:Country>
+        </cac:Address>
+      </cac:PhysicalLocation>
+      <cac:PartyTaxScheme>
+        <cbc:RegistrationName>${escapeXml(customer.name)}</cbc:RegistrationName>
+        <cbc:CompanyID schemeAgencyID="195" schemeAgencyName="CO, DIAN (Dirección de Impuestos y Aduanas Nacionales)" schemeID="" schemeName="${escapeXml(customer.doc_type || '13')}">${escapeXml(customer.doc_number || customer.doc || '222222222222')}</cbc:CompanyID>
+        <cbc:TaxLevelCode listName="49">R-99-PN</cbc:TaxLevelCode>
+        <cac:TaxScheme>
+          <cbc:ID>01</cbc:ID>
+          <cbc:Name>IVA</cbc:Name>
+        </cac:TaxScheme>
+      </cac:PartyTaxScheme>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>${escapeXml(customer.name)}</cbc:RegistrationName>
+        <cbc:CompanyID schemeAgencyID="195" schemeAgencyName="CO, DIAN (Dirección de Impuestos y Aduanas Nacionales)" schemeID="" schemeName="${escapeXml(customer.doc_type || '13')}">${escapeXml(customer.doc_number || customer.doc || '222222222222')}</cbc:CompanyID>
+      </cac:PartyLegalEntity>
+      <cac:Contact>
+        <cbc:Telephone>${escapeXml(customer.phone || '+573000000000')}</cbc:Telephone>
+        <cbc:ElectronicMail>${escapeXml(customer.email || 'consumidorfinal@dian.gov.co')}</cbc:ElectronicMail>
+      </cac:Contact>
+    </cac:Party>
+  </cac:AccountingCustomerParty>
+  <cac:PaymentMeans>
+    <cbc:ID>1</cbc:ID>
+    <cbc:PaymentMeansCode>${escapeXml(invoice.payment_method || '10')}</cbc:PaymentMeansCode>
+    <cbc:PaymentDueDate>${escapeXml(invoice.issue_date)}</cbc:PaymentDueDate>
+  </cac:PaymentMeans>
+  <cac:TaxTotal>
+    <cbc:TaxAmount currencyID="COP">${valIva}</cbc:TaxAmount>
+    <cac:TaxSubtotal>
+      <cbc:TaxableAmount currencyID="COP">${valFac}</cbc:TaxableAmount>
+      <cbc:TaxAmount currencyID="COP">${valIva}</cbc:TaxAmount>
+      <cac:TaxCategory>
+        <cbc:Percent>0.00</cbc:Percent>
+        <cac:TaxScheme>
+          <cbc:ID>01</cbc:ID>
+          <cbc:Name>IVA</cbc:Name>
+        </cac:TaxScheme>
+      </cac:TaxCategory>
+    </cac:TaxSubtotal>
+  </cac:TaxTotal>
+  <cac:LegalMonetaryTotal>
+    <cbc:LineExtensionAmount currencyID="COP">${valFac}</cbc:LineExtensionAmount>
+    <cbc:TaxExclusiveAmount currencyID="COP">${valFac}</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="COP">${valTot}</cbc:TaxInclusiveAmount>
+    <cbc:PayableAmount currencyID="COP">${valTot}</cbc:PayableAmount>
+  </cac:LegalMonetaryTotal>
+${lineItemsXml}
+</Invoice>`;
+}
+
+async function handleAdminDian(request, env) {
+  const user = await verifySession(request, env);
+  if (!user) {
+    return jsonResponse({ ok: false, error: 'No autorizado' }, 401);
+  }
+
+  const url = new URL(request.url);
+  const path = url.pathname;
+
+  // 1. GET /api/admin/dian/config
+  if (path === '/api/admin/dian/config' && request.method === 'GET') {
+    if (!env || !env.DB) return jsonResponse({ ok: false, error: 'DB no disponible' }, 500);
+    const config = await env.DB.prepare('SELECT * FROM dian_config WHERE id = 1').first();
+    return jsonResponse({ ok: true, config: config || {} });
+  }
+
+  // 2. POST /api/admin/dian/config (Solo Admin)
+  if (path === '/api/admin/dian/config' && request.method === 'POST') {
+    if (!isAdminUser(user)) return jsonResponse({ ok: false, error: 'Requiere rol Administrador' }, 403);
+    const body = await request.json().catch(() => ({}));
+    if (!env || !env.DB) return jsonResponse({ ok: false, error: 'DB no disponible' }, 500);
+
+    await env.DB.prepare(
+      `UPDATE dian_config SET
+        environment = COALESCE(?, environment),
+        software_id = COALESCE(?, software_id),
+        software_pin = COALESCE(?, software_pin),
+        test_set_id = COALESCE(?, test_set_id),
+        technical_key = COALESCE(?, technical_key),
+        resolution_number = COALESCE(?, resolution_number),
+        resolution_date = COALESCE(?, resolution_date),
+        prefix = COALESCE(?, prefix),
+        range_from = COALESCE(?, range_from),
+        range_to = COALESCE(?, range_to),
+        current_consecutive = COALESCE(?, current_consecutive),
+        valid_until = COALESCE(?, valid_until),
+        issuer_nit = COALESCE(?, issuer_nit),
+        issuer_dv = COALESCE(?, issuer_dv),
+        issuer_name = COALESCE(?, issuer_name),
+        issuer_trade_name = COALESCE(?, issuer_trade_name),
+        issuer_address = COALESCE(?, issuer_address),
+        issuer_phone = COALESCE(?, issuer_phone),
+        issuer_email = COALESCE(?, issuer_email),
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = 1`
+    ).bind(
+      body.environment, body.software_id, body.software_pin, body.test_set_id,
+      body.technical_key, body.resolution_number, body.resolution_date,
+      body.prefix, body.range_from, body.range_to, body.current_consecutive,
+      body.valid_until, body.issuer_nit, body.issuer_dv, body.issuer_name,
+      body.issuer_trade_name, body.issuer_address, body.issuer_phone, body.issuer_email
+    ).run();
+
+    const updated = await env.DB.prepare('SELECT * FROM dian_config WHERE id = 1').first();
+    return jsonResponse({ ok: true, config: updated });
+  }
+
+  // 3. GET /api/admin/dian/invoices
+  if (path === '/api/admin/dian/invoices' && request.method === 'GET') {
+    if (!env || !env.DB) return jsonResponse({ ok: false, error: 'DB no disponible' }, 500);
+    const limit = Math.min(Number(url.searchParams.get('limit')) || 50, 100);
+    const rows = await env.DB.prepare(
+      'SELECT id, order_number, invoice_number, prefix, consecutive, cufe, issue_date, issue_time, customer_name, customer_doc, total, status, created_at FROM dian_invoices ORDER BY id DESC LIMIT ?'
+    ).bind(limit).all();
+    return jsonResponse({ ok: true, invoices: rows.results || [] });
+  }
+
+  // 4. GET /api/admin/dian/invoices/:id/xml
+  if (path.startsWith('/api/admin/dian/invoices/') && path.endsWith('/xml') && request.method === 'GET') {
+    if (!env || !env.DB) return jsonResponse({ ok: false, error: 'DB no disponible' }, 500);
+    const parts = path.split('/');
+    const invId = parts[parts.length - 2];
+    const invoice = await env.DB.prepare('SELECT invoice_number, xml_signed FROM dian_invoices WHERE id = ? OR invoice_number = ?').bind(invId, invId).first();
+    if (!invoice || !invoice.xml_signed) {
+      return new Response('Factura XML no encontrada', { status: 404 });
+    }
+    return new Response(invoice.xml_signed, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/xml; charset=utf-8',
+        'Content-Disposition': `attachment; filename="${invoice.invoice_number}.xml"`,
+        ...CORS_HEADERS,
+      },
+    });
+  }
+
+  // 5. POST /api/admin/dian/generate-invoice
+  if (path === '/api/admin/dian/generate-invoice' && request.method === 'POST') {
+    if (!env || !env.DB) return jsonResponse({ ok: false, error: 'DB no disponible' }, 500);
+    const body = await request.json().catch(() => ({}));
+    const config = await env.DB.prepare('SELECT * FROM dian_config WHERE id = 1').first();
+    if (!config) return jsonResponse({ ok: false, error: 'Configuración DIAN no encontrada' }, 500);
+
+    const consecutive = Number(config.current_consecutive) || 1;
+    const prefix = config.prefix || 'SETP';
+    const invoiceNumber = `${prefix}${consecutive}`;
+
+    // Fecha y hora oficial Colombia (UTC-5)
+    const nowBogota = new Date(Date.now() - 5 * 3600 * 1000);
+    const issueDate = nowBogota.toISOString().slice(0, 10);
+    const issueTime = nowBogota.toISOString().slice(11, 19) + '-05:00';
+
+    const subtotal = Number(body.subtotal || body.total || 0);
+    const taxIva = Number(body.tax_iva || 0);
+    const taxInc = Number(body.tax_inc || 0);
+    const total = Number(body.total || subtotal);
+
+    const customer = {
+      name: body.customer_name || 'Consumidor Final',
+      doc_type: body.customer_doc_type || '13',
+      doc_number: body.customer_doc || '222222222222',
+      email: body.customer_email || 'facturacion@mucadele.com.co',
+      phone: body.customer_phone || '+573184131391',
+      address: body.customer_address || 'Santa Marta, Magdalena',
+    };
+
+    // Calcular CUFE Anexo Técnico 1.9
+    const cufe = await calculateCUFE({
+      numFac: invoiceNumber,
+      fecFac: issueDate,
+      horFac: issueTime,
+      valFac: subtotal,
+      codImp1: '01',
+      valImp1: taxIva,
+      codImp2: '04',
+      valImp2: taxInc,
+      codImp3: '03',
+      valImp3: 0,
+      valTot: total,
+      nitOfe: config.issuer_nit,
+      numAdq: customer.doc_number,
+      clTec: config.technical_key,
+      tipoAmb: config.environment || '2',
+    });
+
+    const securityCode = await calculateSoftwareSecurityCode(config.software_id, config.software_pin, invoiceNumber);
+    const qrData = buildDIANQRCode({
+      numFac: invoiceNumber,
+      fecFac: issueDate,
+      horFac: issueTime,
+      nitOfe: config.issuer_nit,
+      numAdq: customer.doc_number,
+      valFac: subtotal,
+      valIva: taxIva,
+      valOtroImp: taxInc,
+      valTot: total,
+      cufe,
+    });
+
+    const items = body.items || [
+      { id: 'PROD-01', name: 'Consumo Licorería / Venta Mostrador', quantity: 1, price: total },
+    ];
+
+    const xml = buildUBL21InvoiceXML({
+      config,
+      invoice: { prefix, consecutive, cufe, qr_data: qrData, issue_date: issueDate, issue_time: issueTime, subtotal, tax_iva: taxIva, total, payment_method: body.payment_method || '10' },
+      items,
+      customer,
+      securityCode,
+    });
+
+    // Guardar en dian_invoices e incrementar consecutivo atómicamente
+    await env.DB.prepare(
+      `INSERT INTO dian_invoices (
+        order_number, invoice_number, prefix, consecutive, cufe, qr_data,
+        issue_date, issue_time, customer_id, customer_name, customer_doc_type,
+        customer_doc, customer_email, customer_phone, payment_method,
+        subtotal, tax_iva, tax_inc, total, status, xml_signed
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      body.order_number || null, invoiceNumber, prefix, consecutive, cufe, qrData,
+      issueDate, issueTime, body.customer_id || null, customer.name, customer.doc_type,
+      customer.doc_number, customer.email, customer.phone, body.payment_method || '10',
+      subtotal, taxIva, taxInc, total, 'generated', xml
+    ).run();
+
+    await env.DB.prepare(
+      'UPDATE dian_config SET current_consecutive = current_consecutive + 1 WHERE id = 1'
+    ).run();
+
+    return jsonResponse({
+      ok: true,
+      invoice_number: invoiceNumber,
+      cufe,
+      qr_data: qrData,
+      issue_date: issueDate,
+      issue_time: issueTime,
+      total,
+      xml_url: `/api/admin/dian/invoices/${invoiceNumber}/xml`,
+    });
+  }
+
+  // 6. POST /api/admin/dian/run-test-set (Habilitación Software Propio DIAN)
+  if (path === '/api/admin/dian/run-test-set' && request.method === 'POST') {
+    if (!isAdminUser(user)) return jsonResponse({ ok: false, error: 'Requiere rol Administrador' }, 403);
+    if (!env || !env.DB) return jsonResponse({ ok: false, error: 'DB no disponible' }, 500);
+
+    const config = await env.DB.prepare('SELECT * FROM dian_config WHERE id = 1').first();
+    if (!config) return jsonResponse({ ok: false, error: 'Configuración DIAN no encontrada' }, 500);
+
+    const testSetId = config.test_set_id || 'TEST-SET-MUCADELE-2026';
+    const testCases = [
+      { name: 'Factura 1: Venta Contado Efectivo Licor Nacional', subtotal: 54000, iva: 0, total: 54000, pay: '10', items: [{ id: 'antioqueno-azul-750', name: 'Aguardiente Antioqueño Azul 750ml', quantity: 1, price: 54000 }] },
+      { name: 'Factura 2: Venta Whisky Importado Tarjeta Débito', subtotal: 160000, iva: 0, total: 160000, pay: '49', items: [{ id: 'jw-black-750', name: 'Johnnie Walker Black Label 700ml', quantity: 1, price: 160000 }] },
+      { name: 'Factura 3: Venta Múltiple Cerveza + Ron Contado', subtotal: 96000, iva: 0, total: 96000, pay: '10', items: [{ id: 'six-club-dorada', name: 'Six Pack Club Colombia', quantity: 1, price: 28000 }, { id: 'ron-medellin-8-750', name: 'Ron Medellín 8 Años 750ml', quantity: 1, price: 68000 }] },
+      { name: 'Factura 4: Consumidor Corporativo NIT con IVA discriminado', subtotal: 300000, iva: 57000, total: 357000, pay: '10', docType: '31', doc: '900543210', custName: 'DISTRIBUIDORA DEL CARIBE S.A.S.', items: [{ id: 'promo-evento-1', name: 'Paquete Eventos Empresariales', quantity: 1, price: 300000 }] },
+      { name: 'Factura 5: Venta Mostrador Tarjeta Crédito', subtotal: 85000, iva: 0, total: 85000, pay: '48', items: [{ id: 'tequila-1800', name: 'Tequila 1800 Reposado', quantity: 1, price: 85000 }] },
+      { name: 'Factura 6: Venta Domicilio Shipday Santa Marta', subtotal: 62000, iva: 0, total: 62000, pay: '10', items: [{ id: 'antioqueno-verde-750', name: 'Aguardiente Antioqueño Verde 750ml', quantity: 1, price: 52000 }, { id: 'domicilio', name: 'Servicio de Entrega Domiciliaria', quantity: 1, price: 10000 }] },
+      { name: 'Factura 7: Venta Mayorista Menor con Descuento', subtotal: 210000, iva: 0, total: 210000, pay: '10', items: [{ id: 'ron-caldas-trad-750', name: 'Ron Caldas Tradicional x 4', quantity: 4, price: 52500 }] },
+      { name: 'Factura 8: Factura Final de Cierre Set de Habilitación', subtotal: 120000, iva: 0, total: 120000, pay: '49', items: [{ id: 'combo-cierre', name: 'Combo Parranda Vallenata', quantity: 1, price: 120000 }] },
+    ];
+
+    const results = [];
+    let currentConsecutive = Number(config.current_consecutive) || 1;
+    const prefix = config.prefix || 'SETP';
+    const nowBogota = new Date(Date.now() - 5 * 3600 * 1000);
+    const issueDate = nowBogota.toISOString().slice(0, 10);
+
+    for (let i = 0; i < testCases.length; i++) {
+      const tc = testCases[i];
+      const invNum = `${prefix}${currentConsecutive}`;
+      const timeOffsetSeconds = i * 15;
+      const issueTime = new Date(nowBogota.getTime() + timeOffsetSeconds * 1000).toISOString().slice(11, 19) + '-05:00';
+
+      const customer = {
+        name: tc.custName || 'Consumidor Final Pruebas',
+        doc_type: tc.docType || '13',
+        doc_number: tc.doc || '222222222222',
+        email: 'facturacion@mucadele.com.co',
+        phone: '+573184131391',
+        address: 'Santa Marta, Magdalena',
+      };
+
+      const cufe = await calculateCUFE({
+        numFac: invNum,
+        fecFac: issueDate,
+        horFac: issueTime,
+        valFac: tc.subtotal,
+        codImp1: '01',
+        valImp1: tc.iva,
+        codImp2: '04',
+        valImp2: 0,
+        codImp3: '03',
+        valImp3: 0,
+        valTot: tc.total,
+        nitOfe: config.issuer_nit,
+        numAdq: customer.doc_number,
+        clTec: config.technical_key,
+        tipoAmb: config.environment || '2',
+      });
+
+      const secCode = await calculateSoftwareSecurityCode(config.software_id, config.software_pin, invNum);
+      const qr = buildDIANQRCode({
+        numFac: invNum,
+        fecFac: issueDate,
+        horFac: issueTime,
+        nitOfe: config.issuer_nit,
+        numAdq: customer.doc_number,
+        valFac: tc.subtotal,
+        valIva: tc.iva,
+        valOtroImp: 0,
+        valTot: tc.total,
+        cufe,
+      });
+
+      const xml = buildUBL21InvoiceXML({
+        config,
+        invoice: { prefix, consecutive: currentConsecutive, cufe, qr_data: qr, issue_date: issueDate, issue_time: issueTime, subtotal: tc.subtotal, tax_iva: tc.iva, total: tc.total, payment_method: tc.pay },
+        items: tc.items,
+        customer,
+        securityCode: secCode,
+      });
+
+      await env.DB.prepare(
+        `INSERT OR REPLACE INTO dian_invoices (
+          order_number, invoice_number, prefix, consecutive, cufe, qr_data,
+          issue_date, issue_time, customer_id, customer_name, customer_doc_type,
+          customer_doc, customer_email, customer_phone, payment_method,
+          subtotal, tax_iva, tax_inc, total, status, xml_signed
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        `TEST-SET-${i + 1}`, invNum, prefix, currentConsecutive, cufe, qr,
+        issueDate, issueTime, null, customer.name, customer.doc_type,
+        customer.doc_number, customer.email, customer.phone, tc.pay,
+        tc.subtotal, tc.iva, 0, tc.total, 'test_generated', xml
+      ).run();
+
+      results.push({
+        test_case: i + 1,
+        name: tc.name,
+        invoice_number: invNum,
+        cufe,
+        total: tc.total,
+        xml_url: `/api/admin/dian/invoices/${invNum}/xml`,
+      });
+
+      currentConsecutive++;
+    }
+
+    await env.DB.prepare(
+      'UPDATE dian_config SET current_consecutive = ? WHERE id = 1'
+    ).bind(currentConsecutive).run();
+
+    return jsonResponse({
+      ok: true,
+      test_set_id: testSetId,
+      total_invoices_generated: results.length,
+      next_consecutive: currentConsecutive,
+      results,
+    });
+  }
+
+  return jsonResponse({ ok: false, error: 'Endpoint DIAN no encontrado' }, 404);
+}
 
 const PROTECTED_PREFIXES = ['/admin', '/pos', '/manual', '/clientes'];
 
@@ -3457,6 +4069,10 @@ export default {
 
     if (path.startsWith('/api/admin/orders/')) {
       return handleShipdayOrderActions(request, env);
+    }
+
+    if (path.startsWith('/api/admin/dian/')) {
+      return handleAdminDian(request, env);
     }
 
     if (path === '/api/webhooks/shipday') {

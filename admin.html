@@ -74,8 +74,11 @@
       <button type="button" class="admin-tab-btn" role="tab" data-tab="orders" aria-selected="false">
         4. Historial de Ventas y Despachos
       </button>
+      <button type="button" class="admin-tab-btn" role="tab" data-tab="dian" aria-selected="false">
+        5. 📜 Facturación DIAN
+      </button>
       <a href="/clientes" class="admin-tab-btn" style="text-decoration:none;display:inline-flex;align-items:center;color:inherit;font-weight:700;">
-        5. 👥 Clientes y Cartera
+        6. 👥 Clientes y Cartera
       </a>
     </nav>
 
@@ -427,6 +430,102 @@
       </div>
 
       <div id="admin-orders-list" class="admin-grid-list"></div>
+    </section>
+
+    <!-- SECCIÓN 5: FACTURACIÓN ELECTRÓNICA DIAN UBL 2.1 -->
+    <section id="tab-dian" class="admin-card" hidden>
+      <div class="admin-section-header">
+        <div>
+          <h2 class="admin-section-title">📜 Facturación Electrónica DIAN UBL 2.1</h2>
+          <p class="admin-section-desc">Módulo de emisión fiscal bajo modalidad Software Propio. Cumplimiento Anexo Técnico 1.9 DIAN.</p>
+        </div>
+        <div style="display:flex;gap:0.75rem;align-items:center;">
+          <span id="dian-env-badge" class="badge" style="background:#FEF3C7;color:#92400E;font-weight:700;padding:6px 14px;border-radius:20px;font-size:0.85rem;">Ambiente: Habilitación (2)</span>
+          <button type="button" id="btn-run-dian-testset" class="btn-primary" style="background:#0284C7;border-color:#0284C7;padding:8px 16px;font-size:0.9rem;">
+            🚀 Ejecutar Set de Pruebas (8 Facturas)
+          </button>
+        </div>
+      </div>
+
+      <!-- Configuración y Credenciales DIAN -->
+      <div class="admin-panel-callout" style="background:var(--surface,#FFFFFF);border:1px solid var(--border,#E5E7EB);border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">
+        <h3 class="admin-section-subtitle" style="margin-top:0;margin-bottom:0.75rem;font-size:1.05rem;">⚙️ Parámetros Técnicos de Software Propio</h3>
+        <form id="dian-config-form" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:1rem;">
+          <div class="admin-form-group">
+            <label for="dian-env" class="admin-form-label">Ambiente DIAN</label>
+            <select id="dian-env" class="admin-form-input">
+              <option value="2">2 - Habilitación / Pruebas</option>
+              <option value="1">1 - Producción Oficial</option>
+            </select>
+          </div>
+          <div class="admin-form-group">
+            <label for="dian-software-id" class="admin-form-label">Software ID (UUID DIAN) *</label>
+            <input type="text" id="dian-software-id" class="admin-form-input" required placeholder="Ej. 7a3b8c9d-...">
+          </div>
+          <div class="admin-form-group">
+            <label for="dian-pin" class="admin-form-label">Software PIN (5 dígitos) *</label>
+            <input type="password" id="dian-pin" class="admin-form-input" required placeholder="Ej. 12345" maxlength="5">
+          </div>
+          <div class="admin-form-group">
+            <label for="dian-test-set-id" class="admin-form-label">TestSetId (Habilitación) *</label>
+            <input type="text" id="dian-test-set-id" class="admin-form-input" placeholder="Ej. TEST-SET-MUCADELE-2026">
+          </div>
+          <div class="admin-form-group" style="grid-column: 1 / -1;">
+            <label for="dian-tech-key" class="admin-form-label">Clave Técnica DIAN (Resolución Formulario 1876) *</label>
+            <input type="text" id="dian-tech-key" class="admin-form-input" style="font-family:monospace;" placeholder="Cadena hexadecimal asignada por DIAN">
+          </div>
+          <div class="admin-form-group">
+            <label for="dian-prefix" class="admin-form-label">Prefijo Facturación</label>
+            <input type="text" id="dian-prefix" class="admin-form-input" value="SETP" maxlength="5">
+          </div>
+          <div class="admin-form-group">
+            <label for="dian-consecutive" class="admin-form-label">Consecutivo Actual</label>
+            <input type="number" id="dian-consecutive" class="admin-form-input" value="1" min="1">
+          </div>
+          <div class="admin-form-group">
+            <label for="dian-res-num" class="admin-form-label">Número de Resolución</label>
+            <input type="text" id="dian-res-num" class="admin-form-input" value="18760000001">
+          </div>
+          <div class="admin-form-group">
+            <label for="dian-res-date" class="admin-form-label">Fecha Resolución</label>
+            <input type="date" id="dian-res-date" class="admin-form-input" value="2026-01-01">
+          </div>
+          <div style="grid-column: 1 / -1; display:flex; justify-content:flex-end; gap:0.75rem; margin-top:0.5rem;">
+            <button type="submit" class="btn-primary" style="padding:9px 22px;">Guardar Configuración DIAN</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Resultados de Set de Pruebas -->
+      <div id="dian-testset-results" class="admin-panel-callout" style="display:none;background:#F0F9FF;border:1.5px solid #BAE6FD;border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">
+        <h3 class="admin-section-subtitle" style="color:#0369A1;margin-top:0;">✅ Set de Pruebas Generado Exitosamente</h3>
+        <p style="color:#0284C7;font-size:0.9rem;margin-bottom:1rem;">Se generaron las 8 facturas reglamentarias con hash CUFE SHA-384 y firma XAdES-EPES:</p>
+        <div id="dian-testset-items" style="display:grid;gap:0.75rem;"></div>
+      </div>
+
+      <!-- Tabla de Facturas Emitidas -->
+      <div class="admin-section-header" style="margin-top:1.5rem;">
+        <h3 class="admin-section-subtitle">Facturas Electrónicas Emitidas</h3>
+        <button type="button" id="btn-refresh-dian-invoices" class="btn-outline" style="padding:6px 14px;font-size:0.85rem;">🔄 Actualizar</button>
+      </div>
+      <div class="admin-table-wrap">
+        <table class="admin-table" style="font-variant-numeric: tabular-nums;">
+          <thead>
+            <tr>
+              <th>Factura</th>
+              <th>Fecha y Hora</th>
+              <th>Adquiriente (Cliente)</th>
+              <th>Total (COP)</th>
+              <th>CUFE (SHA-384)</th>
+              <th>Estado</th>
+              <th>UBL 2.1</th>
+            </tr>
+          </thead>
+          <tbody id="dian-invoices-tbody">
+            <tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-sub,#6B7280);">Cargando facturas DIAN...</td></tr>
+          </tbody>
+        </table>
+      </div>
     </section>
   </main>
 

@@ -153,3 +153,63 @@ CREATE TABLE IF NOT EXISTS customers (
 
 CREATE INDEX IF NOT EXISTS idx_customers_doc ON customers(doc_number);
 CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone);
+
+-- 9. Facturación Electrónica DIAN UBL 2.1 (Software Propio)
+CREATE TABLE IF NOT EXISTS dian_config (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  environment TEXT DEFAULT '2', -- '1' = Producción, '2' = Habilitación / Pruebas
+  software_id TEXT DEFAULT '',
+  software_pin TEXT DEFAULT '',
+  test_set_id TEXT DEFAULT '',
+  technical_key TEXT DEFAULT '',
+  resolution_number TEXT DEFAULT '18760000001',
+  resolution_date TEXT DEFAULT '2026-01-01',
+  prefix TEXT DEFAULT 'SETP',
+  range_from INTEGER DEFAULT 1,
+  range_to INTEGER DEFAULT 500000,
+  current_consecutive INTEGER DEFAULT 1,
+  valid_until TEXT DEFAULT '2027-01-01',
+  issuer_nit TEXT DEFAULT '901234567',
+  issuer_dv TEXT DEFAULT '1',
+  issuer_name TEXT DEFAULT 'MUCADELE LICORES S.A.S.',
+  issuer_trade_name TEXT DEFAULT 'Mucadele Licores',
+  issuer_address TEXT DEFAULT 'Calle 19 # 3-45, Santa Marta, Magdalena',
+  issuer_phone TEXT DEFAULT '+573184131391',
+  issuer_email TEXT DEFAULT 'facturacion@mucadele.com.co',
+  issuer_tax_regime TEXT DEFAULT '48',
+  issuer_economic_activity TEXT DEFAULT '4724',
+  certificate_alias TEXT DEFAULT '',
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS dian_invoices (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  order_number TEXT,
+  invoice_number TEXT UNIQUE NOT NULL,
+  prefix TEXT NOT NULL,
+  consecutive INTEGER NOT NULL,
+  cufe TEXT NOT NULL,
+  qr_data TEXT NOT NULL,
+  issue_date TEXT NOT NULL,
+  issue_time TEXT NOT NULL,
+  customer_id INTEGER,
+  customer_name TEXT NOT NULL,
+  customer_doc_type TEXT DEFAULT '13',
+  customer_doc TEXT NOT NULL,
+  customer_email TEXT,
+  customer_phone TEXT,
+  payment_method TEXT DEFAULT '10',
+  subtotal REAL NOT NULL,
+  tax_iva REAL DEFAULT 0.0,
+  tax_inc REAL DEFAULT 0.0,
+  total REAL NOT NULL,
+  status TEXT DEFAULT 'draft',
+  dian_status_code TEXT,
+  dian_response_xml TEXT,
+  xml_signed TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_dian_invoices_order ON dian_invoices (order_number);
+CREATE INDEX IF NOT EXISTS idx_dian_invoices_cufe ON dian_invoices (cufe);
+CREATE INDEX IF NOT EXISTS idx_dian_invoices_created ON dian_invoices (created_at DESC);

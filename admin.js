@@ -57,6 +57,11 @@ document.querySelectorAll('.admin-tab-btn').forEach((btn) => {
     document.getElementById('tab-suppliers').hidden = tab !== 'suppliers';
     document.getElementById('tab-carriers').hidden = tab !== 'carriers';
     document.getElementById('tab-orders').hidden = tab !== 'orders';
+    const tabDian = document.getElementById('tab-dian');
+    if (tabDian) {
+      tabDian.hidden = tab !== 'dian';
+      if (tab === 'dian') loadDianData();
+    }
   });
 });
 
@@ -1646,8 +1651,211 @@ function resetInvoiceScanner() {
 
 document.addEventListener('DOMContentLoaded', () => {
   initInvoiceScanner();
+  initDianModule();
 });
 if (document.readyState === 'complete' || document.readyState === 'interactive') {
   initInvoiceScanner();
+  initDianModule();
+}
+
+// ============================================================================
+// MÓDULO ADMINISTRATIVO DE FACTURACIÓN ELECTRÓNICA DIAN UBL 2.1
+// ============================================================================
+
+async function loadDianData() {
+  await Promise.all([loadDianConfig(), loadDianInvoices()]);
+}
+
+async function loadDianConfig() {
+  try {
+    const res = await fetch('/api/admin/dian/config', { credentials: 'same-origin' });
+    const data = await res.json();
+    if (data.ok && data.config) {
+      const c = data.config;
+      const envSelect = document.getElementById('dian-env');
+      if (envSelect) envSelect.value = c.environment || '2';
+      
+      const badge = document.getElementById('dian-env-badge');
+      if (badge) {
+        if (c.environment === '1') {
+          badge.textContent = 'Ambiente: Producción Oficial (1)';
+          badge.style.background = '#DCFCE7';
+          badge.style.color = '#166534';
+        } else {
+          badge.textContent = 'Ambiente: Habilitación / Pruebas (2)';
+          badge.style.background = '#FEF3C7';
+          badge.style.color = '#92400E';
+        }
+      }
+
+      const swInput = document.getElementById('dian-software-id');
+      if (swInput) swInput.value = c.software_id || '';
+
+      const pinInput = document.getElementById('dian-pin');
+      if (pinInput) pinInput.value = c.software_pin || '';
+
+      const testInput = document.getElementById('dian-test-set-id');
+      if (testInput) testInput.value = c.test_set_id || '';
+
+      const keyInput = document.getElementById('dian-tech-key');
+      if (keyInput) keyInput.value = c.technical_key || '';
+
+      const prefixInput = document.getElementById('dian-prefix');
+      if (prefixInput) prefixInput.value = c.prefix || 'SETP';
+
+      const consInput = document.getElementById('dian-consecutive');
+      if (consInput) consInput.value = c.current_consecutive || 1;
+
+      const resNumInput = document.getElementById('dian-res-num');
+      if (resNumInput) resNumInput.value = c.resolution_number || '';
+
+      const resDateInput = document.getElementById('dian-res-date');
+      if (resDateInput) resDateInput.value = c.resolution_date || '';
+    }
+  } catch (err) {
+    console.error('Error cargando configuración DIAN:', err);
+  }
+}
+
+async function loadDianInvoices() {
+  const tbody = document.getElementById('dian-invoices-tbody');
+  if (!tbody) return;
+
+  try {
+    const res = await fetch('/api/admin/dian/invoices?limit=50', { credentials: 'same-origin' });
+    const data = await res.json();
+    if (!data.ok || !data.invoices || data.invoices.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-sub,#6B7280);">No hay facturas electrónicas registradas aún. Ejecute el Set de Pruebas o emita ventas desde el POS.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = data.invoices.map((inv) => {
+      const cufeShort = inv.cufe ? `${inv.cufe.slice(0, 10)}...${inv.cufe.slice(-8)}` : '-';
+      const statusClass = inv.status === 'test_generated' ? 'badge-info' : 'badge-success';
+      const statusLabel = inv.status === 'test_generated' ? 'Prueba DIAN' : 'Generada UBL';
+
+      return `<tr>
+        <td style="font-weight:700;">${escapeHTML(inv.invoice_number)}</td>
+        <td>${escapeHTML(inv.issue_date)} ${escapeHTML(inv.issue_time || '')}</td>
+        <td>
+          <div style="font-weight:600;">${escapeHTML(inv.customer_name || 'Consumidor Final')}</div>
+          <small style="color:var(--text-sub,#6B7280);">${escapeHTML(inv.customer_doc || '')}</small>
+        </td>
+        <td style="font-weight:700;">${formatCOP(inv.total)}</td>
+        <td>
+          <div style="display:inline-flex;align-items:center;gap:0.35rem;font-family:monospace;font-size:0.8rem;background:#F3F4F6;padding:2px 6px;border-radius:4px;">
+            <span title="${escapeHTML(inv.cufe)}">${escapeHTML(cufeShort)}</span>
+            <button type="button" onclick="navigator.clipboard.writeText('${escapeHTML(inv.cufe)}');showToast('CUFE copiado');" style="background:none;border:none;cursor:pointer;padding:0;font-size:0.9rem;" title="Copiar CUFE completo">📋</button>
+          </div>
+        </td>
+        <td><span class="badge ${statusClass}" style="padding:4px 8px;border-radius:12px;font-size:0.75rem;font-weight:700;">${statusLabel}</span></td>
+        <td>
+          <a href="/api/admin/dian/invoices/${encodeURIComponent(inv.invoice_number)}/xml" target="_blank" download="${escapeHTML(inv.invoice_number)}.xml" class="btn-outline" style="padding:4px 8px;font-size:0.8rem;text-decoration:none;display:inline-flex;align-items:center;gap:0.25rem;">
+            📥 XML
+          </a>
+        </td>
+      </tr>`;
+    }).join('');
+  } catch (err) {
+    console.error('Error cargando facturas DIAN:', err);
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:2rem;color:#DC2626;">Error al cargar las facturas electrónicas.</td></tr>';
+  }
+}
+
+function initDianModule() {
+  const form = document.getElementById('dian-config-form');
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = {
+        environment: document.getElementById('dian-env')?.value || '2',
+        software_id: document.getElementById('dian-software-id')?.value.trim() || '',
+        software_pin: document.getElementById('dian-pin')?.value.trim() || '',
+        test_set_id: document.getElementById('dian-test-set-id')?.value.trim() || '',
+        technical_key: document.getElementById('dian-tech-key')?.value.trim() || '',
+        prefix: document.getElementById('dian-prefix')?.value.trim() || 'SETP',
+        current_consecutive: Number(document.getElementById('dian-consecutive')?.value) || 1,
+        resolution_number: document.getElementById('dian-res-num')?.value.trim() || '',
+        resolution_date: document.getElementById('dian-res-date')?.value || '',
+      };
+
+      try {
+        const res = await fetch('/api/admin/dian/config', {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          showToast('Configuración DIAN actualizada correctamente');
+          loadDianConfig();
+        } else {
+          alert('Error: ' + (data.error || 'No se pudo guardar la configuración'));
+        }
+      } catch (err) {
+        alert('Error de conexión al guardar configuración DIAN');
+      }
+    });
+  }
+
+  const btnRunTestSet = document.getElementById('btn-run-dian-testset');
+  if (btnRunTestSet) {
+    btnRunTestSet.addEventListener('click', async () => {
+      const confirmRun = confirm('¿Desea ejecutar la generación del Set de Pruebas oficial de 8 facturas reglamentarias DIAN con CUFE y UBL 2.1?');
+      if (!confirmRun) return;
+
+      btnRunTestSet.disabled = true;
+      btnRunTestSet.textContent = '⏳ Generando Set de Pruebas...';
+
+      try {
+        const res = await fetch('/api/admin/dian/run-test-set', {
+          method: 'POST',
+          headers: getAuthHeaders(),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          showToast(`¡Set de Pruebas completado! ${data.total_invoices_generated} facturas generadas`);
+          
+          const resultsBox = document.getElementById('dian-testset-results');
+          const itemsBox = document.getElementById('dian-testset-items');
+          if (resultsBox && itemsBox) {
+            resultsBox.style.display = 'block';
+            itemsBox.innerHTML = (data.results || []).map((r) => `
+              <div style="background:#FFFFFF;border:1px solid #BAE6FD;border-radius:8px;padding:0.75rem;display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                  <strong>#${r.test_case}: ${escapeHTML(r.name)}</strong>
+                  <div style="font-family:monospace;font-size:0.8rem;color:#0369A1;">Factura: ${escapeHTML(r.invoice_number)} · Total: ${formatCOP(r.total)}</div>
+                  <div style="font-family:monospace;font-size:0.75rem;color:#64748B;">CUFE: ${escapeHTML(r.cufe.slice(0, 32))}...</div>
+                </div>
+                <div>
+                  <a href="${escapeHTML(r.xml_url)}" target="_blank" download="${escapeHTML(r.invoice_number)}.xml" class="btn-outline" style="padding:5px 12px;font-size:0.85rem;text-decoration:none;">
+                    📥 Descargar UBL 2.1
+                  </a>
+                </div>
+              </div>
+            `).join('');
+          }
+
+          await loadDianConfig();
+          await loadDianInvoices();
+        } else {
+          alert('Error al ejecutar set de pruebas: ' + (data.error || 'Error desconocido'));
+        }
+      } catch (err) {
+        alert('Error de conexión al ejecutar el set de pruebas DIAN');
+      } finally {
+        btnRunTestSet.disabled = false;
+        btnRunTestSet.textContent = '🚀 Ejecutar Set de Pruebas (8 Facturas)';
+      }
+    });
+  }
+
+  const btnRefresh = document.getElementById('btn-refresh-dian-invoices');
+  if (btnRefresh) {
+    btnRefresh.addEventListener('click', () => {
+      loadDianInvoices();
+      showToast('Facturas DIAN actualizadas');
+    });
+  }
 }
 

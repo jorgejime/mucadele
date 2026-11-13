@@ -1129,6 +1129,9 @@ function showReceiptModal(sale) {
       <button type="button" id="print-receipt-btn" class="pos-charge-btn" style="flex:1;justify-content:center;height:48px;">
         🖨️ Imprimir Recibo (80mm)
       </button>
+      <button type="button" id="btn-issue-dian-invoice" class="btn-outline" style="flex:1;justify-content:center;height:48px;font-weight:700;display:inline-flex;align-items:center;gap:0.4rem;color:#0284C7;border-color:#0284C7;">
+        📄 Factura Electrónica DIAN
+      </button>
       <a href="${waHref}" target="_blank" rel="noopener noreferrer" class="pos-charge-btn" style="background:#25D366;border-color:#25D366;color:#FFF;flex:1.2;justify-content:center;height:48px;text-decoration:none;display:inline-flex;align-items:center;gap:0.4rem;font-weight:700;">
         📲 Enviar Comprobante WhatsApp
       </a>
@@ -1144,6 +1147,70 @@ function showReceiptModal(sale) {
   document.getElementById('print-receipt-btn')?.addEventListener('click', () => {
     window.print();
   });
+
+  const btnDian = document.getElementById('btn-issue-dian-invoice');
+  if (btnDian) {
+    btnDian.addEventListener('click', async () => {
+      btnDian.disabled = true;
+      btnDian.textContent = '⏳ Emitiendo en DIAN...';
+
+      let payCode = '10';
+      if (sale.paymentMethod === 'tarjeta_debito') payCode = '49';
+      else if (sale.paymentMethod === 'tarjeta_credito') payCode = '48';
+      else if (sale.paymentMethod === 'transferencia') payCode = '47';
+
+      try {
+        const res = await fetch('/api/admin/dian/generate-invoice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({
+            order_number: sale.orderNumber,
+            customer_name: sale.customerName || 'Consumidor Final',
+            customer_doc: sale.customerDoc || '222222222222',
+            customer_email: sale.customerEmail || 'facturacion@mucadele.com.co',
+            customer_phone: sale.customerPhone || '+573184131391',
+            subtotal: sale.subtotal,
+            total: sale.total,
+            items: sale.items,
+            payment_method: payCode,
+          }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          btnDian.style.background = '#DCFCE7';
+          btnDian.style.borderColor = '#166534';
+          btnDian.style.color = '#166534';
+          btnDian.textContent = `✓ Factura DIAN: ${data.invoice_number}`;
+
+          // Insertar en la tirilla impresa
+          const dianFiscalBox = document.createElement('div');
+          dianFiscalBox.style.cssText = 'background:#F0FDF4;border:1px dashed #16A34A;padding:0.75rem;border-radius:8px;margin-top:0.75rem;font-size:0.78rem;line-height:1.4;';
+          dianFiscalBox.innerHTML = `
+            <strong>FACTURA ELECTRÓNICA DE VENTA: ${escapeHTML(data.invoice_number)}</strong><br>
+            <strong>Fecha/Hora:</strong> ${escapeHTML(data.issue_date)} ${escapeHTML(data.issue_time)}<br>
+            <strong>CUFE:</strong><br>
+            <span style="word-break:break-all;font-size:0.7rem;font-family:monospace;">${escapeHTML(data.cufe)}</span><br>
+            <div style="margin-top:4px;">
+              <a href="${escapeHTML(data.xml_url)}" target="_blank" download class="no-print" style="color:#15803D;font-weight:700;">Descargar XML UBL 2.1</a>
+            </div>
+          `;
+          const receiptDetails = receiptContent.querySelector('div');
+          if (receiptDetails) {
+            receiptDetails.appendChild(dianFiscalBox);
+          }
+        } else {
+          alert('Error emitiendo factura DIAN: ' + (data.error || 'Error desconocido'));
+          btnDian.disabled = false;
+          btnDian.textContent = '📄 Factura Electrónica DIAN';
+        }
+      } catch (err) {
+        alert('Error de conexión con el módulo DIAN');
+        btnDian.disabled = false;
+        btnDian.textContent = '📄 Factura Electrónica DIAN';
+      }
+    });
+  }
 }
 
 document.getElementById('close-receipt-btn')?.addEventListener('click', () => receiptDialog.close());
