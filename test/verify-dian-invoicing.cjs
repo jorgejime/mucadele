@@ -82,7 +82,9 @@ async function runTests() {
   // 2. Login como Administrador
   console.log('\n[2/6] Autenticando sesión Admin en Cloudflare Edge...');
   const loginRes = await request('POST', '/api/login', {
-    password: process.env.ADMIN_PASSWORD || 'mucadele-admin',
+    username: process.env.ADMIN_USER || 'superadmin',
+    password: process.env.ADMIN_PASSWORD || 'Mucadele2026Breiner',
+    redirect: '/admin',
   });
 
   if (loginRes.status !== 200 || !loginRes.data?.ok) {
