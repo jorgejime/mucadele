@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/pos.css?v=20261113v1">
+  <link rel="stylesheet" href="/pos.css?v=20261113v2">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 <body>
@@ -19,23 +19,23 @@
   <!-- Topbar Admin (Solo accesible tras autenticación en servidor) -->
   <header class="pos-header">
     <div class="pos-brand">
-      <img src="/assets/logo-mucadele-transparente.png" alt="Mucadele Licores" class="admin-logo" style="height:38px;width:auto;object-fit:contain;display:block;">
+      <img src="/assets/logo-mucadele-transparente.png" alt="Mucadele Licores" class="admin-logo" style="height:36px;width:auto;object-fit:contain;display:block;">
       <span class="pos-badge pos-badge-admin">SUPERADMIN</span>
-      <h1 style="font-size:1.15rem;font-weight:800;letter-spacing:-0.02em;">Control Mucadele · Inventario y Catálogo</h1>
+      <h1 class="admin-topbar-title">Control Mucadele · Inventario</h1>
     </div>
 
     <div class="pos-actions">
-      <a href="/clientes" class="btn-outline" style="border-color:var(--brand-gold);font-weight:700;">
-        👥 Clientes y Cartera
+      <a href="/clientes" class="btn-outline btn-topbar-link" style="border-color:var(--brand-gold);font-weight:700;">
+        👥 Clientes
       </a>
-      <a href="/pos" class="btn-outline btn-pos-link">
-        🖥️ Ir a Caja POS
+      <a href="/pos" class="btn-outline btn-pos-link btn-topbar-link">
+        🖥️ Caja POS
       </a>
-      <a href="/manual" class="btn-outline btn-manual-link">
-        📖 Manual Operativo
+      <a href="/manual" class="btn-outline btn-manual-link btn-topbar-link">
+        📖 Manual
       </a>
-      <a href="/" class="btn-outline">Ver Tienda Pública</a>
-      <a href="/api/logout?next=/admin" class="btn-outline">Cerrar sesión</a>
+      <a href="/" class="btn-outline btn-topbar-link">Tienda</a>
+      <a href="/api/logout?next=/admin" class="btn-outline btn-topbar-link">Salir</a>
     </div>
   </header>
 
@@ -43,19 +43,19 @@
     <!-- KPIs de Inventario -->
     <section class="admin-kpis" aria-label="Resumen de inventario">
       <div class="admin-kpi-card">
-        <span>Productos en Catálogo</span>
+        <span>Catálogo</span>
         <strong id="kpi-prod-count">0</strong>
       </div>
       <div class="admin-kpi-card">
-        <span>Unidades Totales en Bodega</span>
+        <span>Bodega</span>
         <strong id="kpi-total-units">0</strong>
       </div>
       <div class="admin-kpi-card">
-        <span>Valorización Inventario (COP)</span>
+        <span>Valor Inventario</span>
         <strong id="kpi-inventory-value" class="admin-kpi-action">$0</strong>
       </div>
       <div class="admin-kpi-card">
-        <span>Alertas Stock Bajo / Agotado</span>
+        <span>Stock Crítico</span>
         <strong id="kpi-low-stock" class="admin-kpi-warning">0</strong>
       </div>
     </section>
@@ -63,22 +63,22 @@
     <!-- Navegación por Pestañas -->
     <nav class="admin-tabs" role="tablist" aria-label="Secciones de administración">
       <button type="button" class="admin-tab-btn" role="tab" data-tab="inventory" aria-selected="true">
-        1. Inventario y Productos
+        1. Inventario
       </button>
       <button type="button" class="admin-tab-btn" role="tab" data-tab="suppliers" aria-selected="false">
-        2. Proveedores y Pedidos por Stock Mínimo
+        2. Proveedores y Stock
       </button>
       <button type="button" class="admin-tab-btn" role="tab" data-tab="carriers" aria-selected="false">
-        3. Domiciliarios (Shipday)
+        3. Domiciliarios
       </button>
       <button type="button" class="admin-tab-btn" role="tab" data-tab="orders" aria-selected="false">
-        4. Historial de Ventas y Despachos
+        4. Ventas y Despacho
       </button>
       <button type="button" class="admin-tab-btn" role="tab" data-tab="dian" aria-selected="false">
         5. 📜 Facturación DIAN
       </button>
       <a href="/clientes" class="admin-tab-btn" style="text-decoration:none;display:inline-flex;align-items:center;color:inherit;font-weight:700;">
-        6. 👥 Clientes y Cartera
+        6. 👥 Clientes
       </a>
     </nav>
 
