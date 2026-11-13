@@ -3,23 +3,35 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Mucadele Licores · Domicilio en 25 min en Santa Marta</title>
-  <meta name="description" content="Pide whisky Old Parr, Buchanan's, Aguardiente Antioqueño, ron y cervezas frías a domicilio o para recoger en local en Santa Marta. Calle 11 # 24-36.">
-  <meta name="robots" content="index, follow">
+  <title>Mucadele Licores · Domicilio de Licores en 25 min en Santa Marta</title>
+  <meta name="description" content="Licorera a domicilio en Santa Marta y El Rodadero. Pide Whisky Old Parr, Buchanan's, Aguardiente Antioqueño, Ron y cervezas heladas. Entrega express en 25 min con tracking GPS.">
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
   <link rel="canonical" href="https://mucadele.com.co/">
-  <link rel="alternate" type="text/plain" href="https://mucadele.com.co/llms.txt" title="Catálogo estructurado para IA (GEO/AIO)">
+  <link rel="alternate" type="text/markdown" href="https://mucadele.com.co/llms.txt" title="Documentación oficial estructurada para Modelos de Inteligencia Artificial (AIO / GEO)">
 
+  <!-- Metadatos de Geolocalización GEO -->
   <meta name="geo.region" content="CO-MAG">
   <meta name="geo.placename" content="Santa Marta, Magdalena, Colombia">
   <meta name="geo.position" content="11.24383;-74.186437">
   <meta name="ICBM" content="11.24383, -74.186437">
 
+  <!-- Open Graph / Redes Sociales -->
   <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Mucadele Licores">
   <meta property="og:locale" content="es_CO">
-  <meta property="og:title" content="Mucadele Licores · Entrega en 25 min en Santa Marta">
-  <meta property="og:description" content="Whiskies, Aguardiente Antioqueño, Rones, Cervezas frías y Hielo a domicilio o retiro en local en Santa Marta.">
+  <meta property="og:title" content="Mucadele Licores · Domicilios en 25 min en Santa Marta">
+  <meta property="og:description" content="Whiskies 12 Años, Aguardiente Antioqueño, Ron, Cervezas heladas y Hielo a domicilio en Santa Marta y El Rodadero con tracking GPS Shipday.">
   <meta property="og:url" content="https://mucadele.com.co/">
   <meta property="og:image" content="https://mucadele.com.co/assets/logo-mucadele.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Mucadele Licores - Entrega Express en Santa Marta">
+
+  <!-- Twitter Cards -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Mucadele Licores · Licorera Express en Santa Marta">
+  <meta name="twitter:description" content="Pide tus licores favoritos y cervezas heladas con entrega en 25 min en Santa Marta.">
+  <meta name="twitter:image" content="https://mucadele.com.co/assets/logo-mucadele.png">
 
   <link rel="icon" type="image/x-icon" href="/favicon.ico">
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
@@ -31,29 +43,112 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
 
-  <!-- JSON-LD Invisible para SEO, GEO y AIO -->
+  <!-- Schema.org JSON-LD Enriquecido para SEO, GEO y Motores de Respuesta IA (AIO) -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "LiquorStore",
+    "@type": ["LiquorStore", "DeliveryService"],
     "name": "Mucadele Licores",
     "image": "https://mucadele.com.co/assets/logo-mucadele.png",
     "logo": "https://mucadele.com.co/assets/logo-mucadele.png",
     "url": "https://mucadele.com.co/",
     "telephone": "+573015153867",
+    "priceRange": "$$",
     "currenciesAccepted": "COP",
-    "paymentAccepted": "Cash, Nequi, Daviplata, Card",
+    "paymentAccepted": "Cash, Nequi, Daviplata, Credit Card, Debit Card",
     "address": {
       "@type": "PostalAddress",
       "streetAddress": "Calle 11 # 24-36, Comuna 3",
       "addressLocality": "Santa Marta",
       "addressRegion": "Magdalena",
+      "postalCode": "470001",
       "addressCountry": "CO"
     },
     "geo": {
       "@type": "GeoCoordinates",
       "latitude": 11.24383,
       "longitude": -74.186437
+    },
+    "areaServed": [
+      { "@type": "City", "name": "Santa Marta" },
+      { "@type": "Place", "name": "Centro Histórico" },
+      { "@type": "Place", "name": "El Rodadero" },
+      { "@type": "Place", "name": "Bavaria" },
+      { "@type": "Place", "name": "Bello Horizonte" },
+      { "@type": "Place", "name": "Pozos Colorados" },
+      { "@type": "Place", "name": "Mamatoco" },
+      { "@type": "Place", "name": "Gaira" },
+      { "@type": "Place", "name": "Taganga" },
+      { "@type": "Place", "name": "Bellavista" }
+    ],
+    "openingHoursSpecification": [
+      {
+        "@type": "OpeningHoursSpecification",
+        "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+        "opens": "10:00",
+        "closes": "04:00"
+      }
+    ],
+    "hasOfferCatalog": {
+      "@type": "OfferCatalog",
+      "name": "Catálogo de Licores a Domicilio Santa Marta",
+      "itemListElement": [
+        {
+          "@type": "Offer",
+          "itemOffered": {
+            "@type": "Product",
+            "name": "Whisky Grand Old Parr 12 Años 750ml",
+            "description": "Whisky escocés blended 12 años servido a temperatura óptima."
+          },
+          "price": "155000",
+          "priceCurrency": "COP",
+          "availability": "https://schema.org/InStock"
+        },
+        {
+          "@type": "Offer",
+          "itemOffered": {
+            "@type": "Product",
+            "name": "Whisky Buchanan's DeLuxe 12 Años 750ml",
+            "description": "Whisky escocés premium 12 años con entrega express en Santa Marta."
+          },
+          "price": "165000",
+          "priceCurrency": "COP",
+          "availability": "https://schema.org/InStock"
+        },
+        {
+          "@type": "Offer",
+          "itemOffered": {
+            "@type": "Product",
+            "name": "Aguardiente Antioqueño Tapa Azul Sin Azúcar 750ml",
+            "description": "Aguardiente tradicional colombiano sin azúcar 29°."
+          },
+          "price": "54000",
+          "priceCurrency": "COP",
+          "availability": "https://schema.org/InStock"
+        },
+        {
+          "@type": "Offer",
+          "itemOffered": {
+            "@type": "Product",
+            "name": "Ron Medellín Dorado Añejo 750ml",
+            "description": "Ron añejo colombiano 3 años ideal para celebraciones."
+          },
+          "price": "68000",
+          "priceCurrency": "COP",
+          "availability": "https://schema.org/InStock"
+        },
+        {
+          "@type": "Offer",
+          "itemOffered": {
+            "@type": "Product",
+            "name": "Six Pack Cerveza Club Colombia Dorada",
+            "description": "Seis cervezas en lata de 330ml entregadas completamente frías."
+          },
+          "price": "28000",
+          "priceCurrency": "COP",
+          "availability": "https://schema.org/InStock"
+        }
+      ]
     }
   }
   </script>
