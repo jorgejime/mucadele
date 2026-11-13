@@ -3106,6 +3106,260 @@ async function handleOrderPost(request, env) {
   }
 }
 
+// --- Cotizador Geodésico y Vial para Domicilios en Santa Marta ---
+function calculateHaversineDistanceKm(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Radio de la Tierra en km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function estimateSantaMartaDeliveryFee(deliveryLat, deliveryLng) {
+  // Coordenadas oficiales de Mucadele Licores (Calle 11 # 24-36, Santa Marta)
+  const storeLat = STORE_CONFIG.latitude || 11.24383;
+  const storeLng = STORE_CONFIG.longitude || -74.186437;
+
+  // Bounding box metropolitano de Santa Marta
+  const inMetroArea = deliveryLat >= 11.05 && deliveryLat <= 11.35 && deliveryLng >= -74.30 && deliveryLng <= -74.10;
+  if (!inMetroArea) {
+    return {
+      straight_distance_km: 0,
+      road_distance_km: 0,
+      base_fare: 6000,
+      extra_km_fare: 0,
+      tech_fee: 0,
+      total_fare: 6000,
+      note: 'Tarifa plana de zona estándar Santa Marta.',
+    };
+  }
+
+  const straightDist = calculateHaversineDistanceKm(storeLat, storeLng, deliveryLat, deliveryLng);
+  // Factor vial 1.35x para recorrido vehicular en Santa Marta
+  const roadDist = straightDist * 1.35;
+
+  const baseFare = 5000;
+  const baseKm = 2.0;
+  const pricePerKm = 1380;
+  const techFee = 600;
+
+  let extraFare = 0;
+  if (roadDist > baseKm) {
+    extraFare = (roadDist - baseKm) * pricePerKm;
+  }
+
+  const rawFare = baseFare + extraFare + techFee;
+  // Redondeo comercial al alza a múltiplos de $500 COP
+  const totalFare = Math.max(6000, Math.ceil(rawFare / 500) * 500);
+
+  return {
+    straight_distance_km: Number(straightDist.toFixed(2)),
+    road_distance_km: Number(roadDist.toFixed(2)),
+    base_fare: baseFare,
+    extra_km_fare: Math.round(extraFare),
+    tech_fee: techFee,
+    total_fare: totalFare,
+  };
+}
+
+async function handleShippingEstimate(request, env) {
+  const url = new URL(request.url);
+  const latStr = url.searchParams.get('lat');
+  const lngStr = url.searchParams.get('lng');
+
+  if (!latStr || !lngStr) {
+    return jsonResponse({
+      ok: true,
+      estimate: {
+        road_distance_km: 0,
+        total_fare: 6000,
+        note: 'Tarifa base estándar de domicilio ($6.000 COP).',
+      },
+    });
+  }
+
+  const lat = parseFloat(latStr);
+  const lng = parseFloat(lngStr);
+
+  if (isNaN(lat) || isNaN(lng)) {
+    return jsonResponse({ ok: false, error: 'Coordenadas geográficas inválidas.' }, 400);
+  }
+
+  const estimate = estimateSantaMartaDeliveryFee(lat, lng);
+  return jsonResponse({ ok: true, estimate });
+}
+
+// --- Acciones Rápidas de Despacho Shipday (/api/admin/orders/*) ---
+async function handleShipdayOrderActions(request, env) {
+  const user = await verifySession(request, env);
+  if (!user) return jsonResponse({ ok: false, error: 'No autorizado.' }, 401);
+
+  const url = new URL(request.url);
+  const path = url.pathname;
+  const headers = getShipdayHeaders(env);
+
+  if (request.method !== 'POST') {
+    return jsonResponse({ ok: false, error: 'Método no permitido.' }, 405);
+  }
+
+  let body = {};
+  try {
+    body = await request.json();
+  } catch {}
+
+  // 1. Marcar pedido listo para recoger (/api/admin/orders/ready-to-pickup)
+  if (path === '/api/admin/orders/ready-to-pickup') {
+    const orderId = body.order_id || body.orderId;
+    if (!orderId) {
+      return jsonResponse({ ok: false, error: 'order_id es obligatorio.' }, 400);
+    }
+
+    try {
+      const resp = await fetch(`${SHIPDAY_API_URL}/orders/ready-to-pickup/${encodeURIComponent(orderId)}`, {
+        method: 'POST',
+        headers,
+      });
+
+      if (!resp.ok) {
+        const errText = await resp.text().catch(() => '');
+        return jsonResponse({ ok: false, error: `Shipday error: ${resp.status} ${errText}` }, resp.status);
+      }
+
+      if (env && env.DB) {
+        await env.DB.prepare(
+          "UPDATE orders SET order_state = 'READY_TO_PICKUP' WHERE shipday_order_id = ?"
+        ).bind(Number(orderId)).run().catch(() => {});
+      }
+
+      return jsonResponse({ ok: true, message: 'Pedido marcado como LISTO PARA RECOGER en Shipday.' });
+    } catch (err) {
+      return jsonResponse({ ok: false, error: 'Error comunicando con Shipday: ' + err.message }, 500);
+    }
+  }
+
+  // 2. Asignar domiciliario a la orden (/api/admin/orders/assign)
+  if (path === '/api/admin/orders/assign') {
+    const orderId = body.order_id || body.orderId;
+    const carrierId = body.carrier_id || body.carrierId;
+    const carrierName = (body.carrier_name || 'Motorizado Asignado').trim();
+
+    if (!orderId || !carrierId) {
+      return jsonResponse({ ok: false, error: 'order_id y carrier_id son obligatorios.' }, 400);
+    }
+
+    try {
+      const resp = await fetch(`${SHIPDAY_API_URL}/orders/assign/${encodeURIComponent(orderId)}/${encodeURIComponent(carrierId)}`, {
+        method: 'PUT',
+        headers,
+      });
+
+      if (!resp.ok) {
+        const errText = await resp.text().catch(() => '');
+        return jsonResponse({ ok: false, error: `Shipday error: ${resp.status} ${errText}` }, resp.status);
+      }
+
+      if (env && env.DB) {
+        await env.DB.prepare(
+          "UPDATE orders SET carrier_id = ?, carrier_name = ?, order_state = 'ASSIGNED' WHERE shipday_order_id = ?"
+        ).bind(Number(carrierId), carrierName, Number(orderId)).run().catch(() => {});
+      }
+
+      return jsonResponse({ ok: true, message: `Orden asignada exitosamente a ${carrierName}.` });
+    } catch (err) {
+      return jsonResponse({ ok: false, error: 'Error asignando motorizado en Shipday: ' + err.message }, 500);
+    }
+  }
+
+  // 3. Desasignar domiciliario (/api/admin/orders/unassign)
+  if (path === '/api/admin/orders/unassign') {
+    const orderId = body.order_id || body.orderId;
+    if (!orderId) {
+      return jsonResponse({ ok: false, error: 'order_id es obligatorio.' }, 400);
+    }
+
+    try {
+      const resp = await fetch(`${SHIPDAY_API_URL}/orders/unassign/${encodeURIComponent(orderId)}`, {
+        method: 'PUT',
+        headers,
+      });
+
+      if (!resp.ok) {
+        const errText = await resp.text().catch(() => '');
+        return jsonResponse({ ok: false, error: `Shipday error: ${resp.status} ${errText}` }, resp.status);
+      }
+
+      if (env && env.DB) {
+        await env.DB.prepare(
+          "UPDATE orders SET carrier_id = NULL, carrier_name = NULL, order_state = 'NOT_ASSIGNED' WHERE shipday_order_id = ?"
+        ).bind(Number(orderId)).run().catch(() => {});
+      }
+
+      return jsonResponse({ ok: true, message: 'Domiciliario desasignado de la orden.' });
+    } catch (err) {
+      return jsonResponse({ ok: false, error: 'Error desasignando en Shipday: ' + err.message }, 500);
+    }
+  }
+
+  return jsonResponse({ ok: false, error: 'Acción de despacho no reconocida.' }, 404);
+}
+
+// --- Receptor Webhook de Shipday (/api/webhooks/shipday) ---
+async function handleShipdayWebhook(request, env) {
+  if (request.method !== 'POST') {
+    return jsonResponse({ ok: false, error: 'Método no permitido.' }, 405);
+  }
+
+  let event = {};
+  try {
+    event = await request.json();
+  } catch {
+    return jsonResponse({ ok: false, error: 'Payload JSON inválido.' }, 400);
+  }
+
+  const orderId = event.orderId || event.order_id;
+  const orderNumber = event.orderNumber || event.order_number;
+  const status = (event.orderStatus || event.status || event.event || '').toUpperCase();
+  const carrier = event.carrier || {};
+  const carrierId = carrier.id ? Number(carrier.id) : null;
+  const carrierName = carrier.name || null;
+
+  if (!orderId && !orderNumber) {
+    return jsonResponse({ ok: true, ignored: true, reason: 'Sin identificador de orden' });
+  }
+
+  if (env && env.DB) {
+    try {
+      let isDelivered = status.includes('DELIVERED');
+      if (isDelivered) {
+        await env.DB.prepare(
+          `UPDATE orders 
+           SET order_state = ?, 
+               delivered_at = CURRENT_TIMESTAMP,
+               carrier_id = COALESCE(?, carrier_id),
+               carrier_name = COALESCE(?, carrier_name)
+           WHERE order_number = ? OR shipday_order_id = ?`
+        ).bind(status, carrierId, carrierName, orderNumber || '', Number(orderId) || 0).run();
+      } else {
+        await env.DB.prepare(
+          `UPDATE orders 
+           SET order_state = ?,
+               carrier_id = COALESCE(?, carrier_id),
+               carrier_name = COALESCE(?, carrier_name)
+           WHERE order_number = ? OR shipday_order_id = ?`
+        ).bind(status, carrierId, carrierName, orderNumber || '', Number(orderId) || 0).run();
+      }
+    } catch (err) {
+      console.error('Error procesando webhook Shipday en D1:', err);
+    }
+  }
+
+  return jsonResponse({ ok: true, received: true, status });
+}
+
 
 const PROTECTED_PREFIXES = ['/admin', '/pos', '/manual', '/clientes'];
 
@@ -3195,6 +3449,18 @@ export default {
 
     if (path === '/api/customers') {
       return handleCustomers(request, env);
+    }
+
+    if (path === '/api/shipping/estimate') {
+      return handleShippingEstimate(request, env);
+    }
+
+    if (path.startsWith('/api/admin/orders/')) {
+      return handleShipdayOrderActions(request, env);
+    }
+
+    if (path === '/api/webhooks/shipday') {
+      return handleShipdayWebhook(request, env);
     }
 
     if (path === '/api/order') {

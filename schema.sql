@@ -77,7 +77,9 @@ CREATE TABLE IF NOT EXISTS orders (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   payment_status TEXT DEFAULT 'paid', -- 'paid' | 'pending' | 'cancelled'
   payment_details TEXT, -- JSON con desglose de combinado, referencias de transferencia, etc.
-  customer_doc TEXT -- Cédula o NIT para cuentas por cobrar
+  customer_doc TEXT, -- Cédula o NIT para cuentas por cobrar
+  order_state TEXT DEFAULT 'CREATED', -- 'CREATED' | 'ASSIGNED' | 'READY_TO_PICKUP' | 'ORDER_PICKED_UP' | 'ORDER_DELIVERED'
+  delivered_at TIMESTAMP
 );
 
 -- 6. Tabla de Control de Rate Limiting y Mitigación de Fuerza Bruta

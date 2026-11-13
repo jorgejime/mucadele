@@ -1272,21 +1272,55 @@ async function loadOrdersAndKPIs() {
             String(o.orderNumber || '').startsWith('POS-') ||
             String(o.orderNumber || '').startsWith('RET-');
 
+          const orderState = o.orderStatus?.orderState || 'CREATED';
+          const trackingLink = o.trackingLink || null;
+          const carrierName = o.carrier?.name || 'Por asignar';
+
           return `
-            <div style="border:1px solid var(--border);border-radius:12px;padding:0.85rem;display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;">
-              <div>
-                <span style="font-size:0.78rem;font-weight:800;padding:0.2rem 0.5rem;border-radius:6px;background:${
-                  isPickupOrCounter ? '#E5E5EA' : '#034d27'
-                };color:${isPickupOrCounter ? '#111' : '#FFF'};">
-                  ${isPickupOrCounter ? 'MOSTRADOR / LOCAL' : 'DOMICILIO'}
-                </span>
-                <strong style="margin-left:0.4rem;">#${escapeHTML(o.orderNumber)}</strong> · ${escapeHTML(o.customer?.name || 'Cliente')}
-                <div style="font-size:0.86rem;color:var(--muted);margin-top:0.25rem;">
-                  ${escapeHTML(o.deliveryInstruction || '')}
+            <div style="border:1px solid var(--border);border-radius:12px;padding:0.85rem;display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;background:var(--bg);">
+              <div style="flex:1;min-width:240px;">
+                <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;">
+                  <span style="font-size:0.78rem;font-weight:800;padding:0.2rem 0.5rem;border-radius:6px;background:${
+                    isPickupOrCounter ? '#E5E5EA' : '#034d27'
+                  };color:${isPickupOrCounter ? '#111' : '#FFF'};">
+                    ${isPickupOrCounter ? 'MOSTRADOR / LOCAL' : 'DOMICILIO SHIPDAY'}
+                  </span>
+                  <span class="pos-badge" style="font-size:0.72rem;background:#F6F6F7;color:#111;border:1px solid var(--border);">
+                    ${escapeHTML(orderState)}
+                  </span>
+                  <strong style="margin-left:0.2rem;">#${escapeHTML(o.orderNumber)}</strong>
+                </div>
+                <div style="font-size:0.88rem;font-weight:700;margin-top:0.25rem;">
+                  👤 ${escapeHTML(o.customer?.name || 'Cliente')} ${o.customer?.phoneNumber ? `· 📞 ${escapeHTML(o.customer.phoneNumber)}` : ''}
+                </div>
+                <div style="font-size:0.82rem;color:var(--muted);margin-top:0.15rem;">
+                  🛵 Domiciliario: <strong>${escapeHTML(carrierName)}</strong>
+                </div>
+                <div style="font-size:0.82rem;color:var(--muted);margin-top:0.15rem;">
+                  📍 ${escapeHTML(o.customer?.address || o.deliveryInstruction || '')}
                 </div>
               </div>
-              <div style="font-weight:800;font-size:1.05rem;">
-                ${formatCOP(o.costing?.totalCost || 0)}
+
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:0.4rem;">
+                <div style="font-weight:800;font-size:1.15rem;font-variant-numeric:tabular-nums;">
+                  ${formatCOP(o.costing?.totalCost || 0)}
+                </div>
+                <div style="display:flex;gap:0.35rem;flex-wrap:wrap;">
+                  ${
+                    orderState !== 'READY_TO_PICKUP' && orderState !== 'ORDER_DELIVERED'
+                      ? `<button type="button" class="btn-outline shipday-ready-btn" data-order-id="${o.orderId}" style="font-size:0.78rem;padding:0.25rem 0.5rem;border-color:var(--action);color:var(--action);font-weight:700;">
+                          📦 Listo para recoger
+                        </button>`
+                      : `<span style="font-size:0.78rem;color:var(--action);font-weight:700;">✓ Listo en barra</span>`
+                  }
+                  ${
+                    trackingLink
+                      ? `<a href="${trackingLink}" target="_blank" rel="noopener noreferrer" class="btn-outline" style="font-size:0.78rem;padding:0.25rem 0.5rem;text-decoration:none;border-color:#0284C7;color:#0284C7;font-weight:700;">
+                          🗺️ GPS en Vivo
+                        </a>`
+                      : ''
+                  }
+                </div>
               </div>
             </div>
           `;
@@ -1297,6 +1331,37 @@ async function loadOrdersAndKPIs() {
     arqueoBreakdownTbody.innerHTML = `<tr><td colspan="3" style="color:var(--danger);">Error cargando arqueo: ${escapeHTML(err.message)}</td></tr>`;
   }
 }
+
+// Handler para botón "Listo para recoger" en pedidos Shipday
+liveOrdersContainer?.addEventListener('click', async (e) => {
+  const readyBtn = e.target.closest('.shipday-ready-btn');
+  if (!readyBtn) return;
+  const orderId = readyBtn.getAttribute('data-order-id');
+  if (!orderId) return;
+
+  readyBtn.disabled = true;
+  readyBtn.textContent = 'Actualizando...';
+
+  try {
+    const resp = await fetch('/api/admin/orders/ready-to-pickup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order_id: Number(orderId) }),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      alert('✓ ' + data.message);
+      loadOrdersAndKPIs();
+    } else {
+      alert('Error: ' + data.error);
+      readyBtn.disabled = false;
+      readyBtn.textContent = '📦 Listo para recoger';
+    }
+  } catch (err) {
+    alert('Error de conexión: ' + err.message);
+    readyBtn.disabled = false;
+  }
+});
 
 // Acción de Cobrar Deuda de Crédito
 creditsListContainer?.addEventListener('click', async (event) => {
