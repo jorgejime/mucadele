@@ -806,7 +806,7 @@ async function executeOrderSubmission() {
 
   // Construir detalles de pago enriquecidos
   let paymentDetails = {};
-  let customerDoc = '';
+  let customerDoc = document.getElementById('pos-customer-doc-hidden')?.value.trim() || '';
 
   if (activePaymentMethod === 'efectivo') {
     paymentDetails = {
@@ -1706,4 +1706,456 @@ async function initPOSUserRole() {
 document.addEventListener('DOMContentLoaded', initPOSUserRole);
 if (document.readyState === 'complete' || document.readyState === 'interactive') {
   initPOSUserRole();
+}
+
+/* ==========================================================================
+   GESTIÓN DE TURNOS Y ARQUEO CIEGO (ERP/POS EN CLOUDFLARE D1)
+   ========================================================================== */
+let currentShiftData = null;
+
+async function checkCurrentShift() {
+  const shiftBtn = document.getElementById('pos-shift-indicator-btn');
+  const shiftDot = document.getElementById('shift-dot');
+  const shiftText = document.getElementById('shift-status-text');
+  if (!shiftBtn || !shiftText) return;
+
+  try {
+    const res = await fetch('/api/pos/shift/current');
+    if (!res.ok) return;
+    const data = await res.json();
+
+    if (data.ok && data.active && data.shift) {
+      currentShiftData = data.shift;
+      if (shiftDot) shiftDot.textContent = '🟢';
+      shiftText.textContent = `Turno #${currentShiftData.id} (Base: ${formatCOP(currentShiftData.initial_cash)})`;
+      shiftBtn.style.borderColor = '#034d27';
+      shiftBtn.style.color = '#034d27';
+      shiftBtn.style.background = '#E6F6ED';
+    } else {
+      currentShiftData = null;
+      if (shiftDot) shiftDot.textContent = '🔴';
+      shiftText.textContent = 'Sin Turno (Abrir)';
+      shiftBtn.style.borderColor = 'var(--danger)';
+      shiftBtn.style.color = 'var(--danger)';
+      shiftBtn.style.background = '#FEE2E2';
+    }
+  } catch (err) {
+    console.error('Error verificando turno:', err);
+  }
+}
+
+function openShiftDialog(targetView = null) {
+  const dialog = document.getElementById('shift-dialog');
+  if (!dialog) return;
+
+  const viewOpen = document.getElementById('shift-view-open');
+  const viewActive = document.getElementById('shift-view-active');
+  const viewMovement = document.getElementById('shift-view-movement');
+  const viewClose = document.getElementById('shift-view-close');
+  const viewSummary = document.getElementById('shift-view-summary');
+
+  [viewOpen, viewActive, viewMovement, viewClose, viewSummary].forEach((v) => {
+    if (v) v.hidden = true;
+  });
+
+  if (targetView === 'open' || !currentShiftData) {
+    if (viewOpen) viewOpen.hidden = false;
+  } else if (targetView === 'movement') {
+    if (viewMovement) viewMovement.hidden = false;
+  } else if (targetView === 'close') {
+    if (viewClose) viewClose.hidden = false;
+  } else {
+    // Vista de turno activo
+    if (viewActive) {
+      viewActive.hidden = false;
+      document.getElementById('shift-active-id').textContent = `Turno #${currentShiftData.id}`;
+      document.getElementById('shift-active-cashier').textContent = currentShiftData.cashier_name || currentShiftData.cashier_username;
+      document.getElementById('shift-active-time').textContent = new Date(currentShiftData.opened_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+      document.getElementById('shift-active-base').textContent = formatCOP(currentShiftData.initial_cash || 0);
+      document.getElementById('shift-active-cash-sales').textContent = formatCOP(currentShiftData.total_sales_cash || 0);
+      document.getElementById('shift-active-expenses').textContent = formatCOP(currentShiftData.total_expenses || 0);
+      document.getElementById('shift-active-expected').textContent = formatCOP(currentShiftData.expected_cash || 0);
+
+      const movementsList = document.getElementById('shift-movements-list');
+      if (movementsList) {
+        if (!currentShiftData.movements || currentShiftData.movements.length === 0) {
+          movementsList.innerHTML = '<span style="color:var(--muted);">Sin movimientos registrados en este turno.</span>';
+        } else {
+          movementsList.innerHTML = currentShiftData.movements.map((m) => `
+            <div style="display:flex;justify-content:space-between;padding:0.25rem 0;border-bottom:1px dashed var(--border);">
+              <span>${m.movement_type === 'retiro_gasto' ? '🔴 Gasto:' : '🟢 Ingreso:'} ${escapeHTML(m.concept)}</span>
+              <strong style="${m.movement_type === 'retiro_gasto' ? 'color:var(--danger);' : 'color:var(--action);'}">${formatCOP(m.amount)}</strong>
+            </div>
+          `).join('');
+        }
+      }
+    }
+  }
+
+  dialog.showModal();
+}
+
+// Inicializar eventos de turnos
+function setupShiftEvents() {
+  document.getElementById('pos-shift-indicator-btn')?.addEventListener('click', async () => {
+    await checkCurrentShift();
+    openShiftDialog();
+  });
+
+  document.getElementById('close-shift-dialog-btn')?.addEventListener('click', () => {
+    document.getElementById('shift-dialog')?.close();
+  });
+
+  document.querySelectorAll('.shift-quick-base-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const input = document.getElementById('shift-open-base');
+      if (input) input.value = btn.getAttribute('data-val');
+    });
+  });
+
+  document.getElementById('submit-open-shift-btn')?.addEventListener('click', async () => {
+    const baseInput = document.getElementById('shift-open-base');
+    const notesInput = document.getElementById('shift-open-notes');
+    const initial_cash = Number(baseInput?.value) || 0;
+    const notes = notesInput?.value || '';
+
+    try {
+      const resp = await fetch('/api/pos/shift/open', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ initial_cash, notes }),
+      });
+      const data = await resp.json();
+      if (!data.ok) {
+        alert('Error: ' + data.error);
+        return;
+      }
+      alert('🎉 ' + data.message);
+      document.getElementById('shift-dialog')?.close();
+      await checkCurrentShift();
+    } catch (err) {
+      alert('Error de conexión al abrir turno: ' + err.message);
+    }
+  });
+
+  // Navegación dentro del diálogo de turnos
+  document.getElementById('open-movement-tab-btn')?.addEventListener('click', () => openShiftDialog('movement'));
+  document.getElementById('open-close-shift-tab-btn')?.addEventListener('click', () => openShiftDialog('close'));
+  document.getElementById('cancel-movement-btn')?.addEventListener('click', () => openShiftDialog());
+  document.getElementById('cancel-close-shift-btn')?.addEventListener('click', () => openShiftDialog());
+
+  // Selector de tipo de movimiento
+  let selectedMovementType = 'retiro_gasto';
+  document.querySelectorAll('.shift-mov-type-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.shift-mov-type-btn').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedMovementType = btn.getAttribute('data-type');
+    });
+  });
+
+  document.getElementById('submit-movement-btn')?.addEventListener('click', async () => {
+    if (!currentShiftData) return;
+    const amountInput = document.getElementById('shift-mov-amount');
+    const conceptInput = document.getElementById('shift-mov-concept');
+    const amount = Number(amountInput?.value) || 0;
+    const concept = (conceptInput?.value || '').trim();
+
+    if (amount <= 0 || !concept) {
+      alert('Ingrese un monto válido mayor a 0 y la justificación del movimiento.');
+      return;
+    }
+
+    try {
+      const resp = await fetch('/api/pos/shift/movement', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shift_id: currentShiftData.id,
+          movement_type: selectedMovementType,
+          amount,
+          concept,
+        }),
+      });
+      const data = await resp.json();
+      if (!data.ok) {
+        alert('Error: ' + data.error);
+        return;
+      }
+      alert('✓ ' + data.message);
+      if (amountInput) amountInput.value = '';
+      if (conceptInput) conceptInput.value = '';
+      await checkCurrentShift();
+      openShiftDialog();
+    } catch (err) {
+      alert('Error guardando movimiento: ' + err.message);
+    }
+  });
+
+  // Confirmar Cierre de Turno (Arqueo Ciego)
+  document.getElementById('submit-close-shift-btn')?.addEventListener('click', async () => {
+    if (!currentShiftData) return;
+    const actualCashInput = document.getElementById('shift-close-actual-cash');
+    const notesInput = document.getElementById('shift-close-notes');
+    const actual_cash = Number(actualCashInput?.value);
+
+    if (isNaN(actual_cash) || actual_cash < 0) {
+      alert('Por favor ingrese el total del conteo físico de efectivo contado en la gaveta.');
+      return;
+    }
+
+    if (!confirm('¿Está seguro de cerrar el turno actual? Una vez cerrado se emitirá el acta de arqueo definitiva.')) {
+      return;
+    }
+
+    try {
+      const resp = await fetch('/api/pos/shift/close', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shift_id: currentShiftData.id,
+          actual_cash,
+          notes: notesInput?.value || '',
+        }),
+      });
+      const data = await resp.json();
+      if (!data.ok) {
+        alert('Error: ' + data.error);
+        return;
+      }
+
+      // Renderizar Acta de Arqueo
+      const s = data.summary;
+      const diffClass = s.difference === 0 ? 'arqueo-diff-cuadre' : s.difference > 0 ? 'arqueo-diff-sobrante' : 'arqueo-diff-faltante';
+      const diffSign = s.difference > 0 ? '+' : '';
+
+      const summaryHTML = `
+        <div class="arqueo-receipt">
+          <div class="arqueo-receipt-header">
+            <strong>MUCADELE LICORES</strong><br>
+            ACTA DE CIERRE Y ARQUEO DE CAJA<br>
+            Turno #${s.shift_id} · ${new Date().toLocaleString('es-CO')}
+          </div>
+          <div class="arqueo-receipt-row"><span>Base Inicial:</span><span>${formatCOP(s.initial_cash)}</span></div>
+          <div class="arqueo-receipt-row"><span>Ventas en Efectivo:</span><span>${formatCOP(s.total_sales_cash)}</span></div>
+          <div class="arqueo-receipt-row"><span>Gastos / Retiros:</span><span>-${formatCOP(s.total_expenses)}</span></div>
+          <hr style="border:none;border-top:1px dashed #000;margin:0.4rem 0;">
+          <div class="arqueo-receipt-row"><strong>Efectivo Esperado:</strong><strong>${formatCOP(s.expected_cash)}</strong></div>
+          <div class="arqueo-receipt-row"><strong>Efectivo Contado:</strong><strong>${formatCOP(s.actual_cash)}</strong></div>
+          <div class="arqueo-receipt-row" style="margin-top:0.4rem;">
+            <span>Diferencia:</span>
+            <span class="${diffClass}">${diffSign}${formatCOP(s.difference)} (${s.difference_label})</span>
+          </div>
+          <hr style="border:none;border-top:1px dashed #000;margin:0.4rem 0;">
+          <div style="font-size:11px;color:#333;margin-top:0.3rem;">
+            Ventas Tarjetas: ${formatCOP(s.total_sales_card)}<br>
+            Ventas Transferencias: ${formatCOP(s.total_sales_transfer)}<br>
+            Ventas a Crédito: ${formatCOP(s.total_sales_credit)}
+          </div>
+        </div>
+      `;
+
+      const summaryContainer = document.getElementById('shift-summary-content');
+      if (summaryContainer) summaryContainer.innerHTML = summaryHTML;
+
+      // Mostrar vista de resumen
+      ['shift-view-open', 'shift-view-active', 'shift-view-movement', 'shift-view-close'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.hidden = true;
+      });
+      const viewSummary = document.getElementById('shift-view-summary');
+      if (viewSummary) viewSummary.hidden = false;
+
+      await checkCurrentShift();
+    } catch (err) {
+      alert('Error cerrando turno: ' + err.message);
+    }
+  });
+
+  document.getElementById('print-shift-summary-btn')?.addEventListener('click', () => {
+    const content = document.getElementById('shift-summary-content')?.innerHTML;
+    if (!content) return;
+    const printWindow = window.open('', '_blank', 'width=350,height=500');
+    if (printWindow) {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Acta de Arqueo</title>
+          <style>
+            body { font-family: monospace; font-size: 12px; margin: 0; padding: 10px; width: 80mm; }
+            .arqueo-receipt-header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 6px; margin-bottom: 8px; }
+            .arqueo-receipt-row { display: flex; justify-content: space-between; margin: 3px 0; }
+          </style>
+        </head>
+        <body>${content}</body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.print();
+      printWindow.close();
+    }
+  });
+
+  document.getElementById('finish-shift-dialog-btn')?.addEventListener('click', () => {
+    document.getElementById('shift-dialog')?.close();
+  });
+}
+
+/* ==========================================================================
+   AUTOCOMPLETADO Y GESTIÓN DE CLIENTES FISCALES
+   ========================================================================== */
+function setupCustomerAutocomplete() {
+  const nameInput = document.getElementById('pos-customer-name');
+  const docHidden = document.getElementById('pos-customer-doc-hidden');
+  const phoneInput = document.getElementById('pos-customer-phone');
+  const addressInput = document.getElementById('pos-customer-address');
+  const dropdown = document.getElementById('pos-customer-autocomplete-list');
+  const openModalBtn = document.getElementById('open-customer-modal-btn');
+  const custDialog = document.getElementById('customer-dialog');
+  const closeCustBtn = document.getElementById('close-customer-dialog-btn');
+  const custForm = document.getElementById('customer-form');
+
+  if (!nameInput || !dropdown) return;
+
+  let debounceTimer = null;
+
+  nameInput.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    const query = nameInput.value.trim();
+
+    if (query.length < 2) {
+      dropdown.hidden = true;
+      dropdown.innerHTML = '';
+      return;
+    }
+
+    debounceTimer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/customers?q=${encodeURIComponent(query)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const customers = data.customers || [];
+
+        if (customers.length === 0) {
+          dropdown.innerHTML = `
+            <div style="padding:0.65rem 0.85rem;color:var(--muted);font-size:0.84rem;display:flex;justify-content:space-between;align-items:center;">
+              <span>No encontrado en el directorio</span>
+              <button type="button" id="pos-btn-create-inline" class="btn-outline" style="font-size:0.75rem;padding:0.2rem 0.4rem;border-color:var(--brand-gold);color:var(--brand-gold);">+ Registrar</button>
+            </div>
+          `;
+          dropdown.hidden = false;
+          document.getElementById('pos-btn-create-inline')?.addEventListener('click', () => {
+            dropdown.hidden = true;
+            const custNameField = document.getElementById('cust-name');
+            if (custNameField) custNameField.value = query;
+            custDialog?.showModal();
+          });
+          return;
+        }
+
+        dropdown.innerHTML = customers.map((c) => `
+          <div class="pos-autocomplete-item" data-id="${c.id}" data-name="${escapeHTML(c.name)}" data-doc="${escapeHTML(c.doc_number)}" data-phone="${escapeHTML(c.phone)}" data-address="${escapeHTML(c.address || '')}">
+            <div>
+              <div class="pos-autocomplete-name">${escapeHTML(c.name)}</div>
+              <div class="pos-autocomplete-meta">${c.doc_type || 'CC'}: ${escapeHTML(c.doc_number)} · Tel: ${escapeHTML(c.phone)}</div>
+            </div>
+            ${c.current_debt > 0 ? `<span class="pos-badge" style="background:#FEE2E2;color:#DC2626;font-size:0.72rem;">Deuda: ${formatCOP(c.current_debt)}</span>` : ''}
+          </div>
+        `).join('');
+
+        dropdown.hidden = false;
+
+        dropdown.querySelectorAll('.pos-autocomplete-item').forEach((item) => {
+          item.addEventListener('click', () => {
+            const name = item.getAttribute('data-name');
+            const doc = item.getAttribute('data-doc');
+            const phone = item.getAttribute('data-phone');
+            const addr = item.getAttribute('data-address');
+
+            nameInput.value = name;
+            if (docHidden) docHidden.value = doc;
+            if (phoneInput && phone) phoneInput.value = phone;
+            if (addressInput && addr) addressInput.value = addr;
+
+            const tab = getActiveTab();
+            tab.customerName = name;
+            tab.customerPhone = phone || tab.customerPhone;
+            tab.customerAddress = addr || tab.customerAddress;
+
+            dropdown.hidden = true;
+          });
+        });
+      } catch (err) {
+        console.error('Error buscando clientes:', err);
+      }
+    }, 200);
+  });
+
+  // Cerrar dropdown al hacer clic afuera
+  document.addEventListener('click', (e) => {
+    if (!nameInput.contains(e.target) && !dropdown.contains(e.target)) {
+      dropdown.hidden = true;
+    }
+  });
+
+  // Modal para registrar cliente
+  openModalBtn?.addEventListener('click', () => {
+    custDialog?.showModal();
+  });
+
+  closeCustBtn?.addEventListener('click', () => {
+    custDialog?.close();
+  });
+
+  custForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const doc_type = document.getElementById('cust-doc-type')?.value || 'CC';
+    const doc_number = document.getElementById('cust-doc-number')?.value.trim();
+    const name = document.getElementById('cust-name')?.value.trim();
+    const phone = document.getElementById('cust-phone')?.value.trim();
+    const credit_limit = Number(document.getElementById('cust-credit-limit')?.value) || 0;
+    const address = document.getElementById('cust-address')?.value.trim();
+
+    try {
+      const resp = await fetch('/api/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ doc_type, doc_number, name, phone, credit_limit, address }),
+      });
+      const data = await resp.json();
+      if (!data.ok) {
+        alert('Error: ' + data.error);
+        return;
+      }
+      alert('✓ ' + data.message);
+      nameInput.value = name;
+      if (docHidden) docHidden.value = doc_number;
+      if (phoneInput && phone) phoneInput.value = phone;
+      if (addressInput && address) addressInput.value = address;
+
+      const tab = getActiveTab();
+      tab.customerName = name;
+      tab.customerPhone = phone;
+      tab.customerAddress = address;
+
+      custDialog?.close();
+      custForm.reset();
+    } catch (err) {
+      alert('Error guardando cliente: ' + err.message);
+    }
+  });
+}
+
+// Inicialización de turnos y clientes
+document.addEventListener('DOMContentLoaded', () => {
+  checkCurrentShift();
+  setupShiftEvents();
+  setupCustomerAutocomplete();
+});
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+  checkCurrentShift();
+  setupShiftEvents();
+  setupCustomerAutocomplete();
 }

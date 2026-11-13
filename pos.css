@@ -1891,4 +1891,99 @@ table.admin-table th {
   color: #00702E;
 }
 
+/* Autocomplete de Clientes en POS */
+.pos-autocomplete-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 1000;
+}
+
+.pos-autocomplete-item {
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background 0.12s ease;
+}
+
+.pos-autocomplete-item:last-child {
+  border-bottom: none;
+}
+
+.pos-autocomplete-item:hover,
+.pos-autocomplete-item.active {
+  background: var(--surface);
+}
+
+.pos-autocomplete-name {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.pos-autocomplete-meta {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+/* Chips Rápidos de Base Inicial */
+.shift-quick-base-btn {
+  border-radius: 20px;
+  background: var(--surface);
+  border-color: var(--border);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.shift-quick-base-btn:hover {
+  background: #E5E7EB;
+  border-color: #9CA3AF;
+}
+
+/* Acta de Arqueo Térmica */
+.arqueo-receipt {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+  color: #000;
+  line-height: 1.35;
+}
+
+.arqueo-receipt-header {
+  text-align: center;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px dashed #000;
+  padding-bottom: 0.5rem;
+}
+
+.arqueo-receipt-row {
+  display: flex;
+  justify-content: space-between;
+  margin: 0.2rem 0;
+}
+
+.arqueo-diff-sobrante {
+  color: var(--action);
+  font-weight: 800;
+}
+
+.arqueo-diff-faltante {
+  color: var(--danger);
+  font-weight: 800;
+}
+
+.arqueo-diff-cuadre {
+  color: #000;
+  font-weight: 800;
+}
+
 

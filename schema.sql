@@ -94,3 +94,60 @@ CREATE INDEX IF NOT EXISTS idx_products_stock ON products(stock, min_stock);
 CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_purchase_orders_status ON purchase_orders(status);
 CREATE INDEX IF NOT EXISTS idx_rate_limits_blocked ON rate_limits(blocked_until);
+
+-- 7. Control de Turnos y Arqueo de Caja POS
+CREATE TABLE IF NOT EXISTS cash_shifts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  cashier_username TEXT NOT NULL,
+  cashier_name TEXT NOT NULL,
+  opened_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  closed_at TIMESTAMP,
+  initial_cash REAL NOT NULL DEFAULT 0,
+  expected_cash REAL DEFAULT 0,
+  actual_cash REAL,
+  difference REAL,
+  total_sales_cash REAL DEFAULT 0,
+  total_sales_card REAL DEFAULT 0,
+  total_sales_transfer REAL DEFAULT 0,
+  total_sales_credit REAL DEFAULT 0,
+  total_sales_combined REAL DEFAULT 0,
+  total_expenses REAL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'open',
+  notes TEXT
+);
+
+CREATE TABLE IF NOT EXISTS cash_movements (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  shift_id INTEGER NOT NULL,
+  movement_type TEXT NOT NULL,
+  amount REAL NOT NULL,
+  concept TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  created_by TEXT NOT NULL,
+  FOREIGN KEY (shift_id) REFERENCES cash_shifts(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_cash_shifts_status ON cash_shifts(status, opened_at DESC);
+CREATE INDEX IF NOT EXISTS idx_cash_movements_shift ON cash_movements(shift_id);
+
+-- 8. Entidad Formal de Clientes Fiscales y Cartera
+CREATE TABLE IF NOT EXISTS customers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  doc_type TEXT NOT NULL DEFAULT 'CC',
+  doc_number TEXT UNIQUE NOT NULL,
+  dv TEXT DEFAULT '',
+  name TEXT NOT NULL,
+  commercial_name TEXT DEFAULT '',
+  email TEXT,
+  phone TEXT NOT NULL,
+  address TEXT DEFAULT '',
+  city_code TEXT DEFAULT '47001',
+  tax_regime TEXT DEFAULT '49',
+  fiscal_responsibility TEXT DEFAULT 'R-99-PN',
+  credit_limit REAL DEFAULT 0,
+  current_debt REAL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_customers_doc ON customers(doc_number);
+CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone);

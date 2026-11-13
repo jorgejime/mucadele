@@ -1778,6 +1778,391 @@ async function handleAdminCustomers(request, env) {
   }
 }
 
+// --- POS Shift & Cash Control (/api/pos/shift/*) ---
+async function handlePosShift(request, env) {
+  const user = await verifySession(request, env);
+  if (!user) return jsonResponse({ ok: false, error: 'No autorizado.' }, 401);
+
+  if (!env || !env.DB) {
+    return jsonResponse({ ok: false, error: 'Base de datos D1 no disponible.' }, 500);
+  }
+
+  const url = new URL(request.url);
+  const path = url.pathname;
+
+  // GET /api/pos/shift/current
+  if (request.method === 'GET' && path === '/api/pos/shift/current') {
+    try {
+      const openShift = await env.DB.prepare(
+        "SELECT * FROM cash_shifts WHERE status = 'open' ORDER BY opened_at DESC LIMIT 1"
+      ).first();
+
+      if (!openShift) {
+        return jsonResponse({ ok: true, active: false, shift: null });
+      }
+
+      // Calculate shift totals from orders and movements
+      const ordersRes = await env.DB.prepare(
+        "SELECT payment_method, payment_status, total, payment_details FROM orders WHERE created_at >= ?"
+      ).bind(openShift.opened_at).all();
+      const orders = ordersRes.results || [];
+
+      let cashSales = 0;
+      let cardSales = 0;
+      let transferSales = 0;
+      let creditSales = 0;
+      let combinedSales = 0;
+
+      for (const ord of orders) {
+        const amt = Number(ord.total) || 0;
+        const method = ord.payment_method;
+        if (method === 'efectivo') {
+          cashSales += amt;
+        } else if (method === 'tarjeta_credito' || method === 'tarjeta_debito') {
+          cardSales += amt;
+        } else if (method === 'transferencia') {
+          transferSales += amt;
+        } else if (method === 'credito') {
+          creditSales += amt;
+        } else if (method === 'combinado') {
+          combinedSales += amt;
+          try {
+            const details = typeof ord.payment_details === 'string' ? JSON.parse(ord.payment_details) : ord.payment_details;
+            if (details && details.cash) cashSales += Number(details.cash) || 0;
+          } catch {}
+        }
+      }
+
+      const movementsRes = await env.DB.prepare(
+        "SELECT * FROM cash_movements WHERE shift_id = ? ORDER BY created_at DESC"
+      ).bind(openShift.id).all();
+      const movements = movementsRes.results || [];
+
+      let totalExpenses = 0;
+      let totalManualIncome = 0;
+      for (const m of movements) {
+        const mAmt = Number(m.amount) || 0;
+        if (m.movement_type === 'retiro_gasto') totalExpenses += mAmt;
+        else if (m.movement_type === 'ingreso_manual') totalManualIncome += mAmt;
+      }
+
+      const initialCash = Number(openShift.initial_cash) || 0;
+      const expectedCash = initialCash + cashSales + totalManualIncome - totalExpenses;
+
+      return jsonResponse({
+        ok: true,
+        active: true,
+        shift: {
+          ...openShift,
+          initial_cash: initialCash,
+          total_sales_cash: cashSales,
+          total_sales_card: cardSales,
+          total_sales_transfer: transferSales,
+          total_sales_credit: creditSales,
+          total_sales_combined: combinedSales,
+          total_expenses: totalExpenses,
+          total_manual_income: totalManualIncome,
+          expected_cash: expectedCash,
+          orders_count: orders.length,
+          movements,
+        },
+      });
+    } catch (err) {
+      return jsonResponse({ ok: false, error: 'Error consultando turno activo: ' + err.message }, 500);
+    }
+  }
+
+  // POST /api/pos/shift/open
+  if (request.method === 'POST' && path === '/api/pos/shift/open') {
+    try {
+      const existing = await env.DB.prepare(
+        "SELECT id FROM cash_shifts WHERE status = 'open' LIMIT 1"
+      ).first();
+      if (existing) {
+        return jsonResponse({ ok: false, error: 'Ya existe un turno de caja abierto (Turno #' + existing.id + '). Debe cerrarlo antes de iniciar otro.' }, 400);
+      }
+
+      const body = await request.json().catch(() => ({}));
+      const initialCash = Math.max(0, Number(body.initial_cash) || 0);
+      const notes = (body.notes || '').trim();
+      const cashierName = user.role === 'admin' ? 'Superadmin' : 'Cajero de Turno';
+
+      const res = await env.DB.prepare(
+        `INSERT INTO cash_shifts (cashier_username, cashier_name, initial_cash, notes, status, opened_at)
+         VALUES (?, ?, ?, ?, 'open', CURRENT_TIMESTAMP)`
+      ).bind(user.username, cashierName, initialCash, notes).run();
+
+      const shiftId = res.meta.last_row_id;
+      return jsonResponse({
+        ok: true,
+        shift_id: shiftId,
+        message: 'Turno de caja iniciado exitosamente.',
+      });
+    } catch (err) {
+      return jsonResponse({ ok: false, error: 'Error abriendo turno: ' + err.message }, 500);
+    }
+  }
+
+  // POST /api/pos/shift/movement
+  if (request.method === 'POST' && path === '/api/pos/shift/movement') {
+    try {
+      const body = await request.json().catch(() => ({}));
+      const shiftId = Number(body.shift_id);
+      const movementType = body.movement_type; // 'retiro_gasto' | 'ingreso_manual'
+      const amount = Number(body.amount);
+      const concept = (body.concept || '').trim();
+
+      if (!shiftId || !['retiro_gasto', 'ingreso_manual'].includes(movementType) || amount <= 0 || !concept) {
+        return jsonResponse({ ok: false, error: 'Datos de movimiento inválidos (monto > 0 y concepto obligatorio).' }, 400);
+      }
+
+      const shift = await env.DB.prepare("SELECT * FROM cash_shifts WHERE id = ? AND status = 'open'").bind(shiftId).first();
+      if (!shift) {
+        return jsonResponse({ ok: false, error: 'El turno especificado no está abierto.' }, 400);
+      }
+
+      await env.DB.prepare(
+        `INSERT INTO cash_movements (shift_id, movement_type, amount, concept, created_by)
+         VALUES (?, ?, ?, ?, ?)`
+      ).bind(shiftId, movementType, amount, concept, user.username).run();
+
+      return jsonResponse({ ok: true, message: 'Movimiento registrado correctamente.' });
+    } catch (err) {
+      return jsonResponse({ ok: false, error: 'Error registrando movimiento: ' + err.message }, 500);
+    }
+  }
+
+  // POST /api/pos/shift/close (Arqueo ciego)
+  if (request.method === 'POST' && path === '/api/pos/shift/close') {
+    try {
+      const body = await request.json().catch(() => ({}));
+      const shiftId = Number(body.shift_id);
+      const actualCash = Number(body.actual_cash);
+      const notes = (body.notes || '').trim();
+
+      if (!shiftId || isNaN(actualCash) || actualCash < 0) {
+        return jsonResponse({ ok: false, error: 'Monto de conteo físico de efectivo inválido.' }, 400);
+      }
+
+      const shift = await env.DB.prepare("SELECT * FROM cash_shifts WHERE id = ? AND status = 'open'").bind(shiftId).first();
+      if (!shift) {
+        return jsonResponse({ ok: false, error: 'El turno no existe o ya fue cerrado.' }, 400);
+      }
+
+      // Re-calcular ventas del turno
+      const ordersRes = await env.DB.prepare(
+        "SELECT payment_method, total, payment_details FROM orders WHERE created_at >= ?"
+      ).bind(shift.opened_at).all();
+      const orders = ordersRes.results || [];
+
+      let cashSales = 0;
+      let cardSales = 0;
+      let transferSales = 0;
+      let creditSales = 0;
+      let combinedSales = 0;
+
+      for (const ord of orders) {
+        const amt = Number(ord.total) || 0;
+        const method = ord.payment_method;
+        if (method === 'efectivo') cashSales += amt;
+        else if (method === 'tarjeta_credito' || method === 'tarjeta_debito') cardSales += amt;
+        else if (method === 'transferencia') transferSales += amt;
+        else if (method === 'credito') creditSales += amt;
+        else if (method === 'combinado') {
+          combinedSales += amt;
+          try {
+            const details = typeof ord.payment_details === 'string' ? JSON.parse(ord.payment_details) : ord.payment_details;
+            if (details && details.cash) cashSales += Number(details.cash) || 0;
+          } catch {}
+        }
+      }
+
+      const movementsRes = await env.DB.prepare(
+        "SELECT * FROM cash_movements WHERE shift_id = ?"
+      ).bind(shiftId).all();
+      const movements = movementsRes.results || [];
+
+      let totalExpenses = 0;
+      let totalManualIncome = 0;
+      for (const m of movements) {
+        const mAmt = Number(m.amount) || 0;
+        if (m.movement_type === 'retiro_gasto') totalExpenses += mAmt;
+        else if (m.movement_type === 'ingreso_manual') totalManualIncome += mAmt;
+      }
+
+      const initialCash = Number(shift.initial_cash) || 0;
+      const expectedCash = initialCash + cashSales + totalManualIncome - totalExpenses;
+      const difference = actualCash - expectedCash;
+
+      await env.DB.prepare(
+        `UPDATE cash_shifts
+         SET closed_at = CURRENT_TIMESTAMP,
+             status = 'closed',
+             expected_cash = ?,
+             actual_cash = ?,
+             difference = ?,
+             total_sales_cash = ?,
+             total_sales_card = ?,
+             total_sales_transfer = ?,
+             total_sales_credit = ?,
+             total_sales_combined = ?,
+             total_expenses = ?,
+             notes = ?
+         WHERE id = ?`
+      ).bind(
+        expectedCash,
+        actualCash,
+        difference,
+        cashSales,
+        cardSales,
+        transferSales,
+        creditSales,
+        combinedSales,
+        totalExpenses,
+        notes,
+        shiftId
+      ).run();
+
+      return jsonResponse({
+        ok: true,
+        message: 'Turno cerrado y arqueo registrado con éxito.',
+        summary: {
+          shift_id: shiftId,
+          opened_at: shift.opened_at,
+          initial_cash: initialCash,
+          total_sales_cash: cashSales,
+          total_sales_card: cardSales,
+          total_sales_transfer: transferSales,
+          total_sales_credit: creditSales,
+          total_expenses: totalExpenses,
+          expected_cash: expectedCash,
+          actual_cash: actualCash,
+          difference,
+          difference_label: difference === 0 ? 'CUADRE EXACTO' : difference > 0 ? 'SOBRANTE' : 'FALTANTE',
+        },
+      });
+    } catch (err) {
+      return jsonResponse({ ok: false, error: 'Error cerrando turno: ' + err.message }, 500);
+    }
+  }
+
+  // GET /api/pos/shift/history
+  if (request.method === 'GET' && path === '/api/pos/shift/history') {
+    try {
+      const history = await env.DB.prepare(
+        "SELECT * FROM cash_shifts ORDER BY opened_at DESC LIMIT 20"
+      ).all();
+      return jsonResponse({ ok: true, shifts: history.results || [] });
+    } catch (err) {
+      return jsonResponse({ ok: false, error: 'Error consultando historial de turnos: ' + err.message }, 500);
+    }
+  }
+
+  return jsonResponse({ ok: false, error: 'Ruta no encontrada en gestión de turnos.' }, 404);
+}
+
+// --- Directorio de Clientes Fiscales y Cartera (/api/customers) ---
+async function handleCustomers(request, env) {
+  const user = await verifySession(request, env);
+  if (!user) return jsonResponse({ ok: false, error: 'No autorizado.' }, 401);
+
+  if (!env || !env.DB) {
+    return jsonResponse({ ok: false, error: 'Base de datos D1 no disponible.' }, 500);
+  }
+
+  const url = new URL(request.url);
+
+  if (request.method === 'GET') {
+    try {
+      const q = (url.searchParams.get('q') || '').trim();
+
+      // Sincronización transparente inicial si customers está vacía
+      const countRes = await env.DB.prepare("SELECT COUNT(*) as count FROM customers").first();
+      if (!countRes || countRes.count === 0) {
+        const rawOrders = await env.DB.prepare(
+          "SELECT customer_name, customer_phone, customer_doc FROM orders WHERE customer_phone IS NOT NULL AND customer_phone != ''"
+        ).all();
+        const seenPhones = new Set();
+        for (const o of (rawOrders.results || [])) {
+          const ph = (o.customer_phone || '').trim();
+          if (!ph || seenPhones.has(ph)) continue;
+          seenPhones.add(ph);
+          const name = (o.customer_name || 'Cliente').trim();
+          const doc = (o.customer_doc || '').replace(/[^\w]/g, '') || ph;
+          try {
+            await env.DB.prepare(
+              `INSERT OR IGNORE INTO customers (doc_type, doc_number, name, phone)
+               VALUES ('CC', ?, ?, ?)`
+            ).bind(doc, name, ph).run();
+          } catch {}
+        }
+      }
+
+      let customers;
+      if (q) {
+        const searchPattern = `%${q}%`;
+        const res = await env.DB.prepare(
+          `SELECT * FROM customers 
+           WHERE doc_number LIKE ? OR phone LIKE ? OR name LIKE ? OR commercial_name LIKE ?
+           ORDER BY name ASC LIMIT 25`
+        ).bind(searchPattern, searchPattern, searchPattern, searchPattern).all();
+        customers = res.results || [];
+      } else {
+        const res = await env.DB.prepare(
+          "SELECT * FROM customers ORDER BY created_at DESC LIMIT 50"
+        ).all();
+        customers = res.results || [];
+      }
+
+      return jsonResponse({ ok: true, customers });
+    } catch (err) {
+      return jsonResponse({ ok: false, error: 'Error consultando clientes: ' + err.message }, 500);
+    }
+  }
+
+  if (request.method === 'POST') {
+    try {
+      const body = await request.json().catch(() => ({}));
+      const docType = (body.doc_type || 'CC').trim().toUpperCase();
+      const docNumber = (body.doc_number || '').trim();
+      const dv = (body.dv || '').trim();
+      const name = (body.name || '').trim();
+      const commercialName = (body.commercial_name || '').trim();
+      const email = (body.email || '').trim();
+      const phone = (body.phone || '').trim();
+      const address = (body.address || '').trim();
+      const cityCode = (body.city_code || '47001').trim();
+      const taxRegime = (body.tax_regime || '49').trim();
+      const fiscalResponsibility = (body.fiscal_responsibility || 'R-99-PN').trim();
+      const creditLimit = Math.max(0, Number(body.credit_limit) || 0);
+
+      if (!docNumber || !name || !phone) {
+        return jsonResponse({ ok: false, error: 'Número de documento, nombre completo y teléfono son obligatorios.' }, 400);
+      }
+
+      const existing = await env.DB.prepare("SELECT id FROM customers WHERE doc_number = ?").bind(docNumber).first();
+      if (existing) {
+        await env.DB.prepare(
+          `UPDATE customers
+           SET doc_type = ?, dv = ?, name = ?, commercial_name = ?, email = ?, phone = ?, address = ?, city_code = ?, tax_regime = ?, fiscal_responsibility = ?, credit_limit = ?
+           WHERE id = ?`
+        ).bind(docType, dv, name, commercialName, email, phone, address, cityCode, taxRegime, fiscalResponsibility, creditLimit, existing.id).run();
+        return jsonResponse({ ok: true, customer_id: existing.id, message: 'Cliente actualizado exitosamente.' });
+      } else {
+        const ins = await env.DB.prepare(
+          `INSERT INTO customers (doc_type, doc_number, dv, name, commercial_name, email, phone, address, city_code, tax_regime, fiscal_responsibility, credit_limit)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).bind(docType, docNumber, dv, name, commercialName, email, phone, address, cityCode, taxRegime, fiscalResponsibility, creditLimit).run();
+        return jsonResponse({ ok: true, customer_id: ins.meta.last_row_id, message: 'Cliente registrado exitosamente.' });
+      }
+    } catch (err) {
+      return jsonResponse({ ok: false, error: 'Error guardando cliente: ' + err.message }, 500);
+    }
+  }
+
+  return jsonResponse({ ok: false, error: 'Método no permitido.' }, 405);
+}
+
 // --- AI Invoice Processing (/api/admin/scan-invoice) ---
 async function handleAdminScanInvoice(request, env) {
   const user = await verifySession(request, env);
@@ -2802,6 +3187,14 @@ export default {
 
     if (path === '/api/admin/apply-invoice') {
       return handleAdminApplyInvoice(request, env);
+    }
+
+    if (path.startsWith('/api/pos/shift')) {
+      return handlePosShift(request, env);
+    }
+
+    if (path === '/api/customers') {
+      return handleCustomers(request, env);
     }
 
     if (path === '/api/order') {
