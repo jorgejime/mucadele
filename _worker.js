@@ -1,5 +1,5 @@
 const SHIPDAY_API_URL = 'https://api.shipday.com';
-const FALLBACK_CARRIER_ID = 565174;
+const FALLBACK_CARRIER_ID = 554212;
 
 const ADMIN_USER = 'superadmin';
 const CASHIER_USER = 'cajero';
