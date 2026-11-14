@@ -175,13 +175,34 @@
         </div>
       </div>
 
-      <nav class="filters" aria-label="Categorías">
-        <button type="button" class="filter-btn" data-category="todos" aria-pressed="true">Todo</button>
-        <button type="button" class="filter-btn" data-category="whisky" aria-pressed="false">Whisky</button>
-        <button type="button" class="filter-btn" data-category="aguardiente-ron" aria-pressed="false">Guaro y Ron</button>
-        <button type="button" class="filter-btn" data-category="cervezas" aria-pressed="false">Cervezas y Sixpacks</button>
-        <button type="button" class="filter-btn" data-category="otros" aria-pressed="false">Otros y Pasantes</button>
-      </nav>
+      <!-- Barra de Confianza y Operación en Vivo -->
+      <div class="store-status-bar" role="region" aria-label="Información de despacho y servicio">
+        <div class="status-badge">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span>Abierto ahora · <strong>25 min</strong></span>
+        </div>
+        <div class="status-delivery">
+          <span>🛵 Domicilio $6.000 · Santa Marta y Rodadero</span>
+        </div>
+        <a href="https://wa.me/573015153867?text=Hola%20Mucadele%2C%20quiero%20hacer%20un%20pedido" target="_blank" rel="noopener noreferrer" class="status-whatsapp" title="Pedir o consultar por WhatsApp">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766 0-3.18-2.587-5.771-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.312.045-.697.068-2.072-.502-1.616-.669-2.673-2.316-2.754-2.424-.081-.108-.655-.871-.655-1.662 0-.791.414-1.18.561-1.341.144-.162.313-.203.418-.203.104 0 .209.002.302.006.097.005.228-.037.357.273.133.322.454 1.107.494 1.189.04.081.067.176.013.283-.053.108-.08.176-.16.27-.08.094-.169.21-.241.282-.081.08-.166.168-.071.332.094.162.418.689.897 1.116.616.549 1.135.72 1.297.801.162.081.256.068.35-.04.095-.108.405-.472.513-.634.108-.162.216-.135.364-.081.149.054.945.446 1.107.527.162.081.27.122.31.189.04.068.04.392-.104.797z"/></svg>
+          <span>Pedir por WhatsApp</span>
+        </a>
+      </div>
+
+      <div class="filters-row">
+        <nav class="filters" aria-label="Categorías">
+          <button type="button" class="filter-btn" data-category="todos" aria-pressed="true">Todo</button>
+          <button type="button" class="filter-btn" data-category="whisky" aria-pressed="false">Whisky</button>
+          <button type="button" class="filter-btn" data-category="aguardiente-ron" aria-pressed="false">Guaro y Ron</button>
+          <button type="button" class="filter-btn" data-category="cervezas" aria-pressed="false">Cervezas y Sixpacks</button>
+          <button type="button" class="filter-btn" data-category="otros" aria-pressed="false">Otros y Pasantes</button>
+        </nav>
+        <button type="button" id="toggle-stock-btn" class="toggle-stock-btn" aria-pressed="false" title="Mostrar u ocultar productos agotados">
+          <span class="stock-filter-dot" aria-hidden="true"></span>
+          <span id="stock-filter-label">Solo disponibles</span>
+        </button>
+      </div>
     </div>
   </header>
 
@@ -193,11 +214,11 @@
     +18 Ley 124 de 1994 · El exceso de alcohol es perjudicial para la salud · Calle 11 # 24-36, Santa Marta
   </footer>
 
-  <!-- Único CTA Principal en la Zona del Pulgar -->
-  <div class="thumb-dock">
+  <!-- Único CTA Principal en la Zona del Pulgar (Oculto dinámicamente si el carrito está vacío) -->
+  <div class="thumb-dock dock-hidden" id="primary-thumb-dock">
     <button type="button" id="primary-thumb-cta" class="cta-primary" aria-haspopup="dialog" aria-controls="cart-dialog">
-      <span id="cta-main-text">Ver pedido (2)</span>
-      <span id="cta-price-badge">$173.000</span>
+      <span id="cta-main-text">Ver pedido (0)</span>
+      <span id="cta-price-badge">$0</span>
     </button>
   </div>
 
@@ -279,10 +300,16 @@
           </div>
         </div>
 
-        <button type="submit" id="submit-order-btn" class="cta-primary" style="max-width:100%;">
-          <span id="submit-order-label">Confirmar pedido</span>
-          <span id="pay-btn-amount">$0</span>
-        </button>
+        <div class="checkout-actions">
+          <button type="submit" id="submit-order-btn" class="cta-primary" style="max-width:100%;">
+            <span id="submit-order-label">Confirmar pedido</span>
+            <span id="pay-btn-amount">$0</span>
+          </button>
+          <a id="whatsapp-order-btn" class="btn-whatsapp-checkout" href="#" target="_blank" rel="noopener noreferrer">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766 0-3.18-2.587-5.771-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.312.045-.697.068-2.072-.502-1.616-.669-2.673-2.316-2.754-2.424-.081-.108-.655-.871-.655-1.662 0-.791.414-1.18.561-1.341.144-.162.313-.203.418-.203.104 0 .209.002.302.006.097.005.228-.037.357.273.133.322.454 1.107.494 1.189.04.081.067.176.013.283-.053.108-.08.176-.16.27-.08.094-.169.21-.241.282-.081.08-.166.168-.071.332.094.162.418.689.897 1.116.616.549 1.135.72 1.297.801.162.081.256.068.35-.04.095-.108.405-.472.513-.634.108-.162.216-.135.364-.081.149.054.945.446 1.107.527.162.081.27.122.31.189.04.068.04.392-.104.797z"/></svg>
+            <span>Pedir directo por WhatsApp</span>
+          </a>
+        </div>
       </form>
     </div>
   </dialog>
@@ -303,11 +330,21 @@
       <p style="margin:0 0 1.15rem 0; font-size:0.85rem; color:var(--muted);">
         Venta exclusiva a mayores de edad en Santa Marta (Ley 124 de 1994).
       </p>
-      <button type="button" id="age-confirm-btn" class="cta-primary" style="max-width:100%; justify-content:center;">
-        <span>Sí, soy mayor de 18 años</span>
-      </button>
+      <div style="display:grid;gap:0.6rem;">
+        <button type="button" id="age-confirm-btn" class="cta-primary" style="max-width:100%; justify-content:center;">
+          <span>Sí, soy mayor de 18 años</span>
+        </button>
+        <a href="https://www.google.com" style="color:var(--muted);font-size:0.82rem;text-decoration:none;padding:0.4rem;display:inline-block;">
+          Soy menor de edad (Salir)
+        </a>
+      </div>
     </div>
   </dialog>
+
+  <!-- Botón Flotante Asistencia WhatsApp -->
+  <a href="https://wa.me/573015153867?text=Hola%20Mucadele%2C%20tengo%20una%20consulta" target="_blank" rel="noopener noreferrer" class="whatsapp-floating-bubble" aria-label="Hablar con un asesor en WhatsApp" title="¿Dudas o pedidos especiales? Escríbenos a WhatsApp">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766 0-3.18-2.587-5.771-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.312.045-.697.068-2.072-.502-1.616-.669-2.673-2.316-2.754-2.424-.081-.108-.655-.871-.655-1.662 0-.791.414-1.18.561-1.341.144-.162.313-.203.418-.203.104 0 .209.002.302.006.097.005.228-.037.357.273.133.322.454 1.107.494 1.189.04.081.067.176.013.283-.053.108-.08.176-.16.27-.08.094-.169.21-.241.282-.081.08-.166.168-.071.332.094.162.418.689.897 1.116.616.549 1.135.72 1.297.801.162.081.256.068.35-.04.095-.108.405-.472.513-.634.108-.162.216-.135.364-.081.149.054.945.446 1.107.527.162.081.27.122.31.189.04.068.04.392-.104.797z"/></svg>
+  </a>
 
   <script type="module" src="/app.js"></script>
 </body>

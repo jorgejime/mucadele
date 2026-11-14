@@ -13,8 +13,29 @@ export function escapeHTML(str) {
 export function sanitizeUrl(url) {
   if (!url) return '';
   const u = String(url).trim();
-  if (/^(https?:\/\/|\/)/i.test(u)) return escapeHTML(u);
+  if (/^(https?:\/\/|\/|data:image\/svg\+xml)/i.test(u)) return escapeHTML(u);
   return '';
+}
+
+export function getCategoryFallbackSvg(category) {
+  const strokeColor = '%2371717A';
+  let inner = '<path d="M8 2h8v4l-2 3v11a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V9L6 6V2z"/>';
+  if (category === 'cervezas') {
+    inner = '<rect x="6" y="3" width="12" height="18" rx="3"/><line x1="6" y1="8" x2="18" y2="8"/><line x1="6" y1="16" x2="18" y2="16"/>';
+  } else if (category === 'otros') {
+    inner = '<circle cx="12" cy="12" r="8"/><path d="M12 8v8M8 12h8"/>';
+  }
+  return `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 24 24" fill="none" stroke="${strokeColor}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
+}
+
+export function getProductImageUrl(product) {
+  const url = product.imageUrl || '';
+  const isCondonItem = /today|condon|preservativo/i.test(product.name || '') || product.id === 'today-173';
+  // Si no es Today/condón pero tiene asignado el código de barra 7702049000432 (error de ERP), usar fallback limpio
+  if (url.includes('7702049000432') && !isCondonItem) {
+    return getCategoryFallbackSvg(product.category);
+  }
+  return sanitizeUrl(url) || getCategoryFallbackSvg(product.category);
 }
 
 const DELIVERY_FEE = 6000;
@@ -52,14 +73,19 @@ document.head.appendChild(ldScript);
 let cart = [];
 let activeCategory = 'todos';
 let searchQuery = '';
+let showOutOfStock = false; // Por defecto solo mostrar productos disponibles (stock > 0)
 let orderMode = 'delivery'; // 'delivery' | 'pickup'
 
 const formatCOP = (value) => `$${Number(value || 0).toLocaleString('es-CO')}`;
 
 const productGrid = document.getElementById('product-grid');
+const primaryThumbDock = document.getElementById('primary-thumb-dock') || document.querySelector('.thumb-dock');
 const primaryThumbCta = document.getElementById('primary-thumb-cta');
 const ctaMainText = document.getElementById('cta-main-text');
 const ctaPriceBadge = document.getElementById('cta-price-badge');
+
+const toggleStockBtn = document.getElementById('toggle-stock-btn');
+const stockFilterLabel = document.getElementById('stock-filter-label');
 
 const cartDialog = document.getElementById('cart-dialog');
 const closeCartBtn = document.getElementById('close-cart-btn');
@@ -72,9 +98,12 @@ const payBtnAmount = document.getElementById('pay-btn-amount');
 const submitOrderLabel = document.getElementById('submit-order-label');
 const checkoutForm = document.getElementById('checkout-form');
 const submitOrderBtn = document.getElementById('submit-order-btn');
+const whatsappOrderBtn = document.getElementById('whatsapp-order-btn');
 const deliveryAddressWrap = document.getElementById('delivery-address-wrap');
 const pickupInfoWrap = document.getElementById('pickup-info-wrap');
 const customerAddressInput = document.getElementById('customer-address');
+const customerNameInput = document.getElementById('customer-name');
+const customerPhoneInput = document.getElementById('customer-phone');
 
 const trackingDialog = document.getElementById('tracking-dialog');
 const closeTrackingBtn = document.getElementById('close-tracking-btn');
@@ -101,11 +130,19 @@ function registerDialogLightDismissFallback(dialogEl) {
 registerDialogLightDismissFallback(cartDialog);
 registerDialogLightDismissFallback(trackingDialog);
 
-if (sessionStorage.getItem('mucadele_age_verified') !== 'true') {
-  ageDialog.showModal();
+// Verificación persistente en localStorage para no interrumpir clientes recurrentes
+try {
+  if (localStorage.getItem('mucadele_age_verified') !== 'true') {
+    ageDialog.showModal();
+  }
+} catch {
+  // Fallback si cookies/storage restringidas
 }
+
 ageConfirmBtn.addEventListener('click', () => {
-  sessionStorage.setItem('mucadele_age_verified', 'true');
+  try {
+    localStorage.setItem('mucadele_age_verified', 'true');
+  } catch {}
   ageDialog.close();
 });
 
@@ -165,15 +202,23 @@ function changeQuantity(productId, delta) {
 }
 
 function renderCatalog() {
+  const q = searchQuery.trim().toLowerCase();
   const filtered = catalogData.filter((item) => {
     const matchesCat = activeCategory === 'todos' || item.category === activeCategory;
-    const q = searchQuery.trim().toLowerCase();
     const matchesSearch = !q || item.name.toLowerCase().includes(q);
-    return matchesCat && matchesSearch;
+    const stock = Number(item.stock ?? 24);
+    // Prioridad UX: en exploración por categoría, solo mostrar disponibles para no abrumar con 218 agotados.
+    // Si hay búsqueda explícita por texto o el usuario activó "ver todos", se muestran también los agotados.
+    const matchesStock = showOutOfStock || q.length > 0 || stock > 0;
+    return matchesCat && matchesSearch && matchesStock;
   });
 
   if (filtered.length === 0) {
-    productGrid.innerHTML = `<p style="grid-column:1/-1;color:var(--muted);text-align:center;padding:2rem 0;font-size:1.05rem;">${catalogData.length === 0 ? 'Catálogo en actualización. Próximamente nuevos productos disponibles.' : 'Sin resultados.'}</p>`;
+    productGrid.innerHTML = `<p style="grid-column:1/-1;color:var(--muted);text-align:center;padding:2rem 0;font-size:1.05rem;">${
+      catalogData.length === 0
+        ? 'Catálogo en actualización. Próximamente nuevos productos disponibles.'
+        : 'Sin resultados para la selección actual.'
+    }</p>`;
     return;
   }
 
@@ -203,11 +248,13 @@ function renderCatalog() {
           ? `<span style="font-size:0.74rem;font-weight:700;color:#D97706;display:block;margin-top:0.15rem;">¡Últimas ${stock} uds!</span>`
           : '';
 
+      const cleanImgUrl = getProductImageUrl(product);
+
       return `
         <article class="card" style="${isOut ? 'opacity:0.65;' : ''}">
           <div>
             <div class="card-img-wrap">
-              <img class="card-img" src="${sanitizeUrl(product.imageUrl)}" alt="${escapeHTML(product.name)}" loading="lazy">
+              <img class="card-img" src="${cleanImgUrl}" alt="${escapeHTML(product.name)}" loading="lazy">
             </div>
             <p class="card-price">${formatCOP(product.price)}</p>
             <h2 class="card-title">${escapeHTML(product.name)}</h2>
@@ -220,16 +267,39 @@ function renderCatalog() {
     .join('');
 }
 
+function updateWhatsAppCheckoutLink(subtotal, effectiveDelivery, total) {
+  if (!whatsappOrderBtn) return;
+  if (cart.length === 0) {
+    whatsappOrderBtn.href = 'https://wa.me/573015153867?text=Hola%20Mucadele%2C%20quiero%20hacer%20un%20pedido';
+    return;
+  }
+  const custName = customerNameInput?.value.trim() || '';
+  const custAddress = customerAddressInput?.value.trim() || '';
+  
+  const itemsText = cart.map(i => `• ${i.quantity}x ${i.name} (${formatCOP(i.price * i.quantity)})`).join('\n');
+  let msg = `Hola Mucadele 👋, quiero confirmar este pedido:\n\n${itemsText}\n\n`;
+  msg += `• Subtotal: ${formatCOP(subtotal)}\n`;
+  msg += `• Modalidad: ${orderMode === 'pickup' ? 'Retiro en Local (Calle 11 # 24-36)' : `Domicilio (${formatCOP(effectiveDelivery)})`}\n`;
+  msg += `• *TOTAL A PAGAR: ${formatCOP(total)}*\n`;
+  if (custName) msg += `• Nombre: ${custName}\n`;
+  if (orderMode === 'delivery' && custAddress) msg += `• Dirección: ${custAddress}\n`;
+  
+  whatsappOrderBtn.href = `https://wa.me/573015153867?text=${encodeURIComponent(msg)}`;
+}
+
 function updateCartUI() {
   const count = cart.reduce((sum, item) => sum + item.quantity, 0);
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const effectiveDelivery = count > 0 && orderMode === 'delivery' ? DELIVERY_FEE : 0;
   const total = subtotal + effectiveDelivery;
 
+  // UX Móvil: ocultar el dock si el carrito está vacío para liberar 104px de pantalla
   if (count === 0) {
-    ctaMainText.textContent = 'Selecciona un producto';
+    if (primaryThumbDock) primaryThumbDock.classList.add('dock-hidden');
+    ctaMainText.textContent = 'Ver pedido (0)';
     ctaPriceBadge.textContent = '$0';
   } else {
+    if (primaryThumbDock) primaryThumbDock.classList.remove('dock-hidden');
     ctaMainText.textContent = `Ver pedido (${count})`;
     ctaPriceBadge.textContent = formatCOP(subtotal);
   }
@@ -253,6 +323,8 @@ function updateCartUI() {
   summarySubtotal.textContent = formatCOP(subtotal);
   summaryTotal.textContent = formatCOP(total);
   payBtnAmount.textContent = formatCOP(total);
+
+  updateWhatsAppCheckoutLink(subtotal, effectiveDelivery, total);
 
   if (cart.length === 0) {
     cartItemsContainer.innerHTML = `<p style="margin:0;color:var(--muted);font-size:0.98rem;">No hay productos en tu pedido.</p>`;
@@ -314,6 +386,27 @@ document.getElementById('search-input').addEventListener('input', (event) => {
   searchQuery = event.target.value;
   renderCatalog();
 });
+
+if (toggleStockBtn) {
+  toggleStockBtn.addEventListener('click', () => {
+    showOutOfStock = !showOutOfStock;
+    toggleStockBtn.setAttribute('aria-pressed', showOutOfStock ? 'true' : 'false');
+    if (stockFilterLabel) {
+      stockFilterLabel.textContent = showOutOfStock ? 'Ver todos (inc. agotados)' : 'Solo disponibles';
+    }
+    renderCatalog();
+  });
+}
+
+function refreshWhatsAppOnInput() {
+  const count = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const effectiveDelivery = count > 0 && orderMode === 'delivery' ? DELIVERY_FEE : 0;
+  updateWhatsAppCheckoutLink(subtotal, effectiveDelivery, subtotal + effectiveDelivery);
+}
+
+customerNameInput?.addEventListener('input', refreshWhatsAppOnInput);
+customerAddressInput?.addEventListener('input', refreshWhatsAppOnInput);
 
 primaryThumbCta.addEventListener('click', () => {
   if (cart.length === 0) return;
