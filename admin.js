@@ -95,14 +95,12 @@ function updateInventoryKPIs() {
 
 function getCategoryLabel(cat) {
   switch (cat) {
-    case 'combos':
-      return '🔥 Combos y Promos';
     case 'whisky':
       return 'Whisky';
     case 'aguardiente-ron':
       return 'Aguardiente y Ron';
     case 'cervezas':
-      return 'Cervezas';
+      return 'Cervezas y Sixpacks';
     default:
       return 'Tequila / Hielo / Otros';
   }

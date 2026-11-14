@@ -56,7 +56,6 @@ let orderMode = 'delivery'; // 'delivery' | 'pickup'
 
 const formatCOP = (value) => `$${Number(value || 0).toLocaleString('es-CO')}`;
 
-const promosBannerGrid = document.getElementById('promos-banner-grid');
 const productGrid = document.getElementById('product-grid');
 const primaryThumbCta = document.getElementById('primary-thumb-cta');
 const ctaMainText = document.getElementById('cta-main-text');
@@ -165,50 +164,7 @@ function changeQuantity(productId, delta) {
   updateCartUI();
 }
 
-function renderPromosBanner() {
-  if (!promosBannerGrid) return;
-  const combos = catalogData.filter((item) => item.category === 'combos' && (item.stock ?? 1) > 0);
-  const parentSection = promosBannerGrid.closest('.promos-banner-section');
-  if (combos.length === 0) {
-    if (parentSection) parentSection.hidden = true;
-    return;
-  }
-  if (parentSection) parentSection.hidden = false;
-
-  promosBannerGrid.innerHTML = combos
-    .map((c) => {
-      const orig = c.originalPrice || Math.round(c.price * 1.15);
-      const savings = c.discountSavings || (orig - c.price);
-      const qty = getCartQty(c.id);
-
-      return `
-        <article class="promo-card">
-          <span class="promo-savings-pill">AHORRA ${formatCOP(savings)}</span>
-          <div class="promo-card-top">
-            <img class="promo-img" src="${sanitizeUrl(c.imageUrl)}" alt="${escapeHTML(c.name)}" loading="lazy">
-            <div class="promo-info">
-              <h3>${escapeHTML(c.name)}</h3>
-              <span>${escapeHTML(c.presentation)}</span>
-            </div>
-          </div>
-          <div class="promo-card-bottom">
-            <div class="promo-prices">
-              <span class="promo-price-current">${formatCOP(c.price)}</span>
-              <span class="promo-price-original">${formatCOP(orig)}</span>
-            </div>
-            <button type="button" class="promo-add-btn ${qty > 0 ? 'in-cart' : ''}" data-step-id="${escapeHTML(c.id)}" data-delta="1">
-              ${qty > 0 ? `+ Sumar (${qty})` : '+ Agregar'}
-            </button>
-          </div>
-        </article>
-      `;
-    })
-    .join('');
-}
-
 function renderCatalog() {
-  renderPromosBanner();
-
   const filtered = catalogData.filter((item) => {
     const matchesCat = activeCategory === 'todos' || item.category === activeCategory;
     const q = searchQuery.trim().toLowerCase();
@@ -334,12 +290,6 @@ document.querySelectorAll('.mode-btn').forEach((btn) => {
 });
 
 productGrid.addEventListener('click', (event) => {
-  const btn = event.target.closest('[data-step-id]');
-  if (!btn) return;
-  changeQuantity(btn.getAttribute('data-step-id'), Number(btn.getAttribute('data-delta')));
-});
-
-promosBannerGrid?.addEventListener('click', (event) => {
   const btn = event.target.closest('[data-step-id]');
   if (!btn) return;
   changeQuantity(btn.getAttribute('data-step-id'), Number(btn.getAttribute('data-delta')));
