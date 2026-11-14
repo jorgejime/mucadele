@@ -2169,32 +2169,96 @@ async function handleAdminApplyInvoice(request, env) {
   }
 
   try {
-    const validItems = items.filter((i) => i.product_id && Number(i.quantity) > 0);
+    const validItems = items.filter((i) => Number(i.quantity) > 0 && (i.product_id || i.raw_name));
     if (validItems.length === 0) {
-      return jsonResponse({ ok: false, error: 'Ningún ítem tiene un producto de catálogo asignado con cantidad mayor a cero.' }, 400);
+      return jsonResponse({ ok: false, error: 'Ningún ítem tiene un producto asignado o nombre válido con cantidad mayor a cero.' }, 400);
     }
 
-    // 1. Actualizar el stock atómicamente en Cloudflare D1
-    const updateStatements = validItems.map((item) =>
-      env.DB.prepare(
-        'UPDATE products SET stock = stock + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-      ).bind(Number(item.quantity), item.product_id)
-    );
-    await env.DB.batch(updateStatements);
+    // 0. Auto-registrar o localizar el proveedor en la tabla suppliers si se informó nombre
+    let resolvedSupplierId = null;
+    const cleanSupplierName = String(supplier_name || '').trim();
+    if (cleanSupplierName && !/^Sin proveedor/i.test(cleanSupplierName)) {
+      const existingSup = await env.DB.prepare(
+        'SELECT id FROM suppliers WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) LIMIT 1'
+      )
+        .bind(cleanSupplierName)
+        .first();
+      if (existingSup?.id) {
+        resolvedSupplierId = Number(existingSup.id);
+      } else {
+        const insSup = await env.DB.prepare(
+          `INSERT INTO suppliers (name, contact_name, phone, delivery_days)
+           VALUES (?, 'Creado por Causación IA', '+573000000000', 'Lunes a Sábado')`
+        )
+          .bind(cleanSupplierName)
+          .run();
+        if (insSup?.meta?.last_row_id) {
+          resolvedSupplierId = Number(insSup.meta.last_row_id);
+        }
+      }
+    }
 
-    // 2. Registrar en purchase_orders como orden de compra recibida
+    // 1. Actualizar stock de existentes o auto-crear productos nuevos atómicamente en Cloudflare D1
+    const dbStatements = [];
+    const affectedIds = [];
+
+    for (const item of validItems) {
+      const qty = Math.max(1, Number(item.quantity) || 1);
+      const isNew = !item.product_id || item.product_id === '__new__';
+
+      if (!isNew) {
+        affectedIds.push(item.product_id);
+        dbStatements.push(
+          env.DB.prepare(
+            'UPDATE products SET stock = stock + ?, supplier_id = COALESCE(supplier_id, ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+          ).bind(qty, resolvedSupplierId, item.product_id)
+        );
+      } else {
+        const rawName = String(item.raw_name || 'Producto Nuevo Factura').trim();
+        const baseSlug = rawName
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '');
+        const newSlug = `${baseSlug || 'prod'}-${Date.now().toString().slice(-4)}-${Math.floor(Math.random() * 90 + 10)}`;
+        const unitCost = Math.max(0, Number(item.unit_cost) || 0);
+        const salePrice =
+          Number(item.sale_price) > 0
+            ? Number(item.sale_price)
+            : Math.max(5000, Math.ceil(((unitCost || 35000) * 1.35) / 500) * 500);
+        const category = String(item.category || 'otros').trim();
+        const presentation = String(item.presentation || 'Unidad').trim();
+        const defaultImg = 'https://olimpica.vteximg.com.br/arquivos/ids/2492092/5000281003160_cd5cdf6c25ec4403ad9ca386feedb1cd.webp';
+
+        item.product_id = newSlug;
+        affectedIds.push(newSlug);
+
+        dbStatements.push(
+          env.DB.prepare(
+            `INSERT INTO products (id, name, presentation, category, imageUrl, price, stock, min_stock, reorder_qty, supplier_id, active, sort_order, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 6, 12, ?, 1, 50, CURRENT_TIMESTAMP)`
+          ).bind(newSlug, rawName, presentation, category, defaultImg, salePrice, qty, resolvedSupplierId)
+        );
+      }
+    }
+
+    await env.DB.batch(dbStatements);
+
+    // 2. Registrar en purchase_orders como orden de compra recibida (causación)
     const poNumber = invoice_number
       ? `FAC-${String(invoice_number).replace(/[^a-zA-Z0-9-]/g, '')}`
       : `ING-${Date.now().toString().slice(-6)}`;
     const totalUnits = validItems.reduce((sum, i) => sum + Number(i.quantity), 0);
 
     await env.DB.prepare(
-      `INSERT INTO purchase_orders (po_number, supplier_name, supplier_phone, items_json, total_units, status, received_at, created_at)
-       VALUES (?, ?, ?, ?, ?, 'recibida', CURRENT_TIMESTAMP, ?)`
+      `INSERT INTO purchase_orders (po_number, supplier_id, supplier_name, supplier_phone, items_json, total_units, status, received_at, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'recibida', CURRENT_TIMESTAMP, ?)`
     )
       .bind(
         poNumber,
-        supplier_name,
+        resolvedSupplierId,
+        cleanSupplierName || 'Proveedor Factura IA',
         'Factura de Compra IA',
         JSON.stringify(validItems),
         totalUnits,
@@ -2203,18 +2267,20 @@ async function handleAdminApplyInvoice(request, env) {
       .run();
 
     // 3. Consultar los stocks actualizados de estos productos
-    const placeholders = validItems.map(() => '?').join(', ');
+    const placeholders = affectedIds.map(() => '?').join(', ');
     const updatedProds = await env.DB.prepare(
       `SELECT id, name, stock FROM products WHERE id IN (${placeholders})`
     )
-      .bind(...validItems.map((i) => i.product_id))
+      .bind(...affectedIds)
       .all();
 
     return jsonResponse({
       ok: true,
       message: `¡Inventario actualizado! Se ingresaron ${totalUnits} unidades en ${validItems.length} productos.`,
       po_number: poNumber,
+      supplier_id: resolvedSupplierId,
       total_units_added: totalUnits,
+      updated_products_count: validItems.length,
       updated_products: updatedProds.results || [],
     });
   } catch (err) {

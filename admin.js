@@ -95,6 +95,8 @@ function updateInventoryKPIs() {
 
 function getCategoryLabel(cat) {
   switch (cat) {
+    case 'combos':
+      return '🔥 Combos y Promos';
     case 'whisky':
       return 'Whisky';
     case 'aguardiente-ron':
@@ -1181,76 +1183,48 @@ async function loadAllAdminData() {
 loadAllAdminData();
 
 /* ==========================================================================
-   ESCÁNER INTELIGENTE DE FACTURAS CON IA (PDF Y FOTO) -> INVENTARIO D1
+   ESCÁNER INTELIGENTE DE FACTURAS CON IA (PDF Y FOTO) -> CAUSACIÓN D1
    ========================================================================== */
 
 let currentScannedData = null;
-let currentInvoiceBase64 = null;
-let currentInvoiceMime = null;
+let invoiceScannerInitialized = false;
+let dianModuleInitialized = false;
 
 function initInvoiceScanner() {
-  const toggleBtn = document.getElementById('toggle-invoice-scanner-btn');
-  const closeBtn = document.getElementById('close-invoice-scanner-btn');
-  const scannerSection = document.getElementById('invoice-scanner-section');
-  const fileInput = document.getElementById('invoice-file-input');
+  if (invoiceScannerInitialized) return;
+  invoiceScannerInitialized = true;
+
+  const openScannerBtn = document.getElementById('open-invoice-scanner-btn');
+  const aiSection = document.getElementById('ai-invoice-section');
   const dropzone = document.getElementById('invoice-dropzone');
-  const cameraBtn = document.getElementById('scan-camera-btn');
-  const pdfBtn = document.getElementById('scan-pdf-btn');
-  const processBtn = document.getElementById('btn-process-invoice-ai');
-  const applyBtn = document.getElementById('btn-apply-invoice-stock');
-  const cancelBtn = document.getElementById('btn-cancel-invoice-results');
+  const fileInput = document.getElementById('invoice-file-input');
+  const cancelBtn = document.getElementById('cancel-invoice-scan-btn');
+  const discardBtn = document.getElementById('discard-invoice-btn');
+  const applyBtn = document.getElementById('apply-invoice-to-d1-btn');
 
-  if (!scannerSection) return;
-
-  toggleBtn?.addEventListener('click', () => {
-    scannerSection.classList.toggle('hidden');
-    if (!scannerSection.classList.contains('hidden')) {
-      scannerSection.scrollIntoView({ behavior: 'smooth' });
-    }
-  });
-
-  closeBtn?.addEventListener('click', () => {
-    scannerSection.classList.add('hidden');
-  });
-
-  cameraBtn?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (fileInput) {
-      fileInput.accept = 'image/*';
-      fileInput.capture = 'environment';
-      fileInput.click();
-    }
-  });
-
-  pdfBtn?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (fileInput) {
-      fileInput.accept = '.pdf,application/pdf';
-      fileInput.removeAttribute('capture');
-      fileInput.click();
-    }
+  openScannerBtn?.addEventListener('click', () => {
+    const suppliersTabBtn = document.querySelector('.admin-tab-btn[data-tab="suppliers"]');
+    suppliersTabBtn?.click();
+    aiSection?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(() => fileInput?.click(), 180);
   });
 
   dropzone?.addEventListener('click', () => {
-    if (fileInput) {
-      fileInput.accept = '.pdf,image/png,image/jpeg,image/webp';
-      fileInput.removeAttribute('capture');
-      fileInput.click();
-    }
+    fileInput?.click();
   });
 
   dropzone?.addEventListener('dragover', (e) => {
     e.preventDefault();
-    dropzone.classList.add('border-brand-primary', 'bg-brand-primary/5');
+    dropzone.style.background = '#F0FDF4';
   });
 
   dropzone?.addEventListener('dragleave', () => {
-    dropzone.classList.remove('border-brand-primary', 'bg-brand-primary/5');
+    dropzone.style.background = '#FFFFFF';
   });
 
   dropzone?.addEventListener('drop', (e) => {
     e.preventDefault();
-    dropzone.classList.remove('border-brand-primary', 'bg-brand-primary/5');
+    dropzone.style.background = '#FFFFFF';
     if (e.dataTransfer?.files?.length) {
       handleInvoiceFile(e.dataTransfer.files[0]);
     }
@@ -1262,58 +1236,114 @@ function initInvoiceScanner() {
     }
   });
 
-  processBtn?.addEventListener('click', processInvoiceWithAI);
-  applyBtn?.addEventListener('click', applyScannedInvoiceToDatabase);
   cancelBtn?.addEventListener('click', resetInvoiceScanner);
+  discardBtn?.addEventListener('click', resetInvoiceScanner);
+  applyBtn?.addEventListener('click', applyScannedInvoiceToDatabase);
 }
 
 async function handleInvoiceFile(file) {
   if (!file) return;
 
-  const previewContainer = document.getElementById('invoice-preview-container');
+  const statusBox = document.getElementById('invoice-scan-status-box');
+  const resultsBox = document.getElementById('invoice-results-box');
   const previewImg = document.getElementById('invoice-preview-img');
-  const fileInfo = document.getElementById('invoice-file-info');
-  const processBtn = document.getElementById('btn-process-invoice-ai');
-  const resultsContainer = document.getElementById('invoice-results-container');
+  const previewPlaceholder = document.getElementById('invoice-preview-placeholder');
+  const fileNameEl = document.getElementById('invoice-file-name-display');
+  const fileSizeEl = document.getElementById('invoice-file-size-display');
+  const progressEl = document.getElementById('ai-scan-progress-msg');
 
-  resultsContainer?.classList.add('hidden');
-  if (processBtn) processBtn.disabled = true;
-
-  fileInfo.textContent = `Cargando archivo: ${file.name} (${(file.size / 1024).toFixed(1)} KB)...`;
+  if (resultsBox) resultsBox.hidden = true;
+  if (statusBox) statusBox.hidden = false;
+  if (fileNameEl) fileNameEl.textContent = file.name;
+  if (fileSizeEl) fileSizeEl.textContent = `${(file.size / 1024).toFixed(1)} KB`;
+  if (progressEl) {
+    progressEl.innerHTML = '<span>⏳</span><span>Preparando documento y enviando a Inteligencia Artificial...</span>';
+    progressEl.style.color = 'var(--action)';
+  }
 
   try {
-    if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-      fileInfo.textContent = `Renderizando PDF: ${file.name} (${(file.size / 1024).toFixed(1)} KB)...`;
-      const base64Data = await convertPdfToImageBase64(file);
-      currentInvoiceBase64 = base64Data;
-      currentInvoiceMime = 'image/jpeg';
-      previewImg.src = `data:image/jpeg;base64,${base64Data}`;
-      previewContainer.classList.remove('hidden');
-      fileInfo.textContent = `✓ PDF listo: ${file.name} (Página digitalizada en alta resolución)`;
-      if (processBtn) processBtn.disabled = false;
+    let base64Data = '';
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+
+    if (isPdf) {
+      base64Data = await convertPdfToImageBase64(file);
     } else if (file.type.startsWith('image/')) {
-      fileInfo.textContent = `Optimizando imagen: ${file.name}...`;
-      const base64Data = await optimizeImageFile(file);
-      currentInvoiceBase64 = base64Data;
-      currentInvoiceMime = 'image/jpeg';
-      previewImg.src = `data:image/jpeg;base64,${base64Data}`;
-      previewContainer.classList.remove('hidden');
-      fileInfo.textContent = `✓ Imagen lista: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
-      if (processBtn) processBtn.disabled = false;
+      base64Data = await optimizeImageFile(file);
     } else {
-      alert('Formato de archivo no compatible. Por favor suba una foto (.jpg, .png) o un PDF de la factura.');
-      fileInfo.textContent = 'Formato no soportado.';
+      throw new Error('Formato no soportado. Suba una foto (.jpg, .png, .webp) o un archivo PDF.');
+    }
+
+    if (previewImg && previewPlaceholder) {
+      previewImg.src = `data:image/jpeg;base64,${base64Data}`;
+      previewImg.hidden = false;
+      previewPlaceholder.hidden = true;
+    }
+
+    if (progressEl) {
+      progressEl.innerHTML = '<span>🤖</span><span>Analizando factura con IA y cotejando catálogo...</span>';
+    }
+
+    const resp = await fetch('/api/admin/scan-invoice', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        imageBase64: base64Data,
+        mimeType: 'image/jpeg',
+      }),
+    });
+
+    const data = await resp.json();
+    if (!resp.ok || !data.ok || !data.invoice) {
+      throw new Error(data.error || 'Error al analizar la factura con IA.');
+    }
+
+    const inv = data.invoice;
+    currentScannedData = {
+      supplier_name: inv.supplier_name || 'Distribuidor Comercial',
+      invoice_number: inv.invoice_number || `FAC-${Date.now().toString().slice(-6)}`,
+      invoice_date: inv.invoice_date || new Date().toISOString().split('T')[0],
+      total_amount: Number(inv.total_amount) || 0,
+      items: (inv.items || []).map((item) => {
+        const matched = products.find((p) => p.id === item.matched_product_id);
+        const unitCost = Number(item.unit_cost) || 0;
+        const suggestedSale = matched
+          ? Number(matched.price || 0)
+          : Math.max(5000, Math.ceil(((unitCost || 35000) * 1.35) / 500) * 500);
+        return {
+          included: true,
+          raw_name: item.raw_name || 'Producto Facturado',
+          product_id: matched ? matched.id : '__new__',
+          quantity: Math.max(1, Number(item.quantity) || 1),
+          unit_cost: unitCost,
+          sale_price: suggestedSale,
+          current_stock: matched ? Number(matched.stock || 0) : 0,
+        };
+      }),
+    };
+
+    if (statusBox) statusBox.hidden = true;
+    renderScannedResults();
+    if (resultsBox) {
+      resultsBox.hidden = false;
+      resultsBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   } catch (err) {
-    console.error('Error procesando archivo:', err);
-    alert('Error al procesar el archivo: ' + err.message);
-    fileInfo.textContent = 'Error al cargar el archivo.';
+    console.error('Error en escáner IA:', err);
+    if (progressEl) {
+      progressEl.innerHTML = `<span>⚠️</span><span>${escapeHTML(err.message)}</span>`;
+      progressEl.style.color = '#DC2626';
+    }
   }
 }
 
 async function convertPdfToImageBase64(file) {
   if (!window.pdfjsLib) {
     throw new Error('La librería PDF.js no está disponible en este momento.');
+  }
+  if (window.pdfjsLib.GlobalWorkerOptions && !window.pdfjsLib.GlobalWorkerOptions.workerSrc) {
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
   }
 
   const arrayBuffer = await file.arrayBuffer();
@@ -1326,13 +1356,11 @@ async function convertPdfToImageBase64(file) {
   canvas.width = viewport.width;
   canvas.height = viewport.height;
 
-  await page.render({ canvasContext: ctx, viewport: viewport }).promise;
-
-  const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
-  return dataUrl.split(',')[1];
+  await page.render({ canvasContext: ctx, viewport }).promise;
+  return canvas.toDataURL('image/jpeg', 0.88).split(',')[1];
 }
 
-async function optimizeImageFile(file) {
+function optimizeImageFile(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -1357,9 +1385,7 @@ async function optimizeImageFile(file) {
         canvas.height = h;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, w, h);
-
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-        resolve(dataUrl.split(',')[1]);
+        resolve(canvas.toDataURL('image/jpeg', 0.85).split(',')[1]);
       };
       img.onerror = () => reject(new Error('No se pudo cargar la imagen.'));
       img.src = e.target.result;
@@ -1369,293 +1395,245 @@ async function optimizeImageFile(file) {
   });
 }
 
-async function processInvoiceWithAI() {
-  if (!currentInvoiceBase64) {
-    alert('Primero seleccione o capture una factura en foto o PDF.');
-    return;
-  }
-
-  const processBtn = document.getElementById('btn-process-invoice-ai');
-  const loading = document.getElementById('invoice-scanner-loading');
-  const resultsContainer = document.getElementById('invoice-results-container');
-
-  if (processBtn) processBtn.disabled = true;
-  loading?.classList.remove('hidden');
-  resultsContainer?.classList.add('hidden');
-
-  try {
-    const token = localStorage.getItem('mucadele_admin_token') || sessionStorage.getItem('mucadele_admin_token');
-    const resp = await fetch('/api/admin/scan-invoice', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        imageBase64: currentInvoiceBase64,
-        mimeType: currentInvoiceMime || 'image/jpeg',
-      }),
-    });
-
-    const data = await resp.json();
-    if (!resp.ok || !data.ok) {
-      throw new Error(data.error || 'Error al procesar la factura con IA.');
-    }
-
-    currentScannedData = data.data;
-    renderScannedResults(data.data);
-    resultsContainer?.classList.remove('hidden');
-    resultsContainer?.scrollIntoView({ behavior: 'smooth' });
-  } catch (err) {
-    console.error('Error en escaneo con IA:', err);
-    alert('Error al leer la factura con IA: ' + err.message);
-  } finally {
-    loading?.classList.add('hidden');
-    if (processBtn) processBtn.disabled = false;
-  }
+function updateScannedTotalBadge() {
+  const badge = document.getElementById('scanned-total-units-badge');
+  if (!badge || !currentScannedData) return;
+  const total = currentScannedData.items
+    .filter((it) => it.included && Number(it.quantity) > 0)
+    .reduce((acc, it) => acc + Number(it.quantity || 0), 0);
+  badge.textContent = `+${total} uds`;
 }
 
-function renderScannedResults(data) {
-  const suppInput = document.getElementById('scanned-supplier-name');
-  const invNumberInput = document.getElementById('scanned-invoice-number');
-  const invDateInput = document.getElementById('scanned-invoice-date');
-  const invTotalInput = document.getElementById('scanned-invoice-total');
+function renderScannedResults() {
+  if (!currentScannedData) return;
 
-  if (suppInput) suppInput.value = data.supplier_name || '';
-  if (invNumberInput) invNumberInput.value = data.invoice_number || '';
-  if (invDateInput) invDateInput.value = data.invoice_date || new Date().toISOString().split('T')[0];
-  if (invTotalInput) invTotalInput.value = data.invoice_total ? Number(data.invoice_total).toLocaleString('es-CO') : '0';
+  const suppEl = document.getElementById('scanned-supplier-name');
+  const numEl = document.getElementById('scanned-invoice-num');
+  const dateEl = document.getElementById('scanned-invoice-date');
+  const totalEl = document.getElementById('scanned-invoice-total');
+
+  if (suppEl) suppEl.textContent = currentScannedData.supplier_name;
+  if (numEl) numEl.textContent = `#${currentScannedData.invoice_number}`;
+  if (dateEl) dateEl.textContent = currentScannedData.invoice_date;
+  if (totalEl) totalEl.textContent = formatCOP(currentScannedData.total_amount);
 
   const tbody = document.getElementById('scanned-items-tbody');
   if (!tbody) return;
-  tbody.innerHTML = '';
 
-  const items = Array.isArray(data.items) ? data.items : [];
+  const items = currentScannedData.items || [];
   if (items.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-gray-500">No se detectaron ítems en la factura. Puede agregarlos manualmente o intentar con una foto más nítida.</td></tr>`;
+    tbody.innerHTML =
+      '<tr><td colspan="6" style="padding:1rem;text-align:center;color:var(--muted);">No se detectaron ítems en la factura. Intente con una foto más nítida.</td></tr>';
+    updateScannedTotalBadge();
     return;
   }
 
-  items.forEach((item, index) => {
-    const tr = document.createElement('tr');
-    tr.className = 'border-b border-border/50 hover:bg-surface-elevated/40 text-xs transition-colors';
-    tr.dataset.index = index;
+  tbody.innerHTML = items
+    .map((item, idx) => {
+      const isNew = item.product_id === '__new__' || !item.product_id;
+      const newStock = Number(item.current_stock || 0) + Number(item.quantity || 0);
 
-    const matchedProd = products.find((p) => p.id === item.product_id);
-    const currentStock = matchedProd ? Number(matchedProd.stock || 0) : Number(item.current_stock || 0);
-    const addedQty = Number(item.quantity || 0);
-    const newStock = currentStock + addedQty;
-
-    tr.innerHTML = `
-      <td class="p-2.5 font-medium text-text-primary">
-        <div class="font-semibold text-white">${escapeHtml(item.raw_name || 'Ítem')}</div>
-        <div class="text-[10px] text-gray-400">Extraído de factura</div>
-      </td>
-      <td class="p-2.5">
-        <select class="item-product-select w-full bg-surface-elevated border border-border rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-brand-primary" data-index="${index}">
-          <option value="">-- No vincular a catálogo --</option>
-          ${products
-            .map(
-              (p) => `
-            <option value="${p.id}" ${p.id === item.product_id ? 'selected' : ''}>
-              ${p.name} (Stock: ${p.stock || 0})
-            </option>
-          `
-            )
-            .join('')}
-        </select>
-      </td>
-      <td class="p-2.5">
-        <input type="number" min="0" step="1" class="item-qty-input w-20 bg-surface-elevated border border-border rounded px-2 py-1 text-xs text-center font-bold text-brand-primary focus:outline-none focus:border-brand-primary" value="${addedQty}" data-index="${index}">
-      </td>
-      <td class="p-2.5">
-        <input type="number" min="0" step="100" class="item-cost-input w-24 bg-surface-elevated border border-border rounded px-2 py-1 text-xs text-right text-white focus:outline-none focus:border-brand-primary" value="${item.unit_cost || 0}" data-index="${index}">
-      </td>
-      <td class="p-2.5 text-center font-mono font-medium text-gray-300 item-current-stock">${currentStock}</td>
-      <td class="p-2.5 text-center font-mono font-bold text-green-400 bg-green-500/10 rounded item-new-stock">${newStock}</td>
-      <td class="p-2.5 text-center">
-        <button type="button" class="btn-remove-scanned-item text-red-400 hover:text-red-300 p-1" data-index="${index}" title="Quitar ítem">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-        </button>
-      </td>
-    `;
-    tbody.appendChild(tr);
-  });
+      return `
+        <tr data-scan-idx="${idx}" style="border-bottom:1px solid var(--border);">
+          <td style="padding:0.6rem;text-align:center;">
+            <input type="checkbox" class="scan-item-check" data-idx="${idx}" ${item.included ? 'checked' : ''} style="width:18px;height:18px;cursor:pointer;">
+          </td>
+          <td style="padding:0.6rem;">
+            <div style="font-weight:700;color:var(--text);">${escapeHTML(item.raw_name)}</div>
+            <div style="font-size:0.75rem;color:var(--muted);">Leído por IA</div>
+          </td>
+          <td style="padding:0.6rem;">
+            <select class="admin-form-select scan-item-select" data-idx="${idx}" style="font-size:0.84rem;padding:0.35rem 0.5rem;">
+              <option value="__new__" ${isNew ? 'selected' : ''}>✨ Crear producto nuevo en catálogo</option>
+              ${products
+                .map(
+                  (p) =>
+                    `<option value="${escapeHTML(p.id)}" ${p.id === item.product_id ? 'selected' : ''}>${escapeHTML(p.name)} (Stock: ${Number(p.stock || 0)})</option>`
+                )
+                .join('')}
+            </select>
+            <div class="scan-sale-price-wrap" data-idx="${idx}" ${isNew ? '' : 'hidden'} style="margin-top:0.35rem;display:${isNew ? 'flex' : 'none'};align-items:center;gap:0.35rem;font-size:0.76rem;color:var(--muted);">
+              <span>Precio venta:</span>
+              <input type="number" min="500" step="500" class="stock-input scan-item-sale-price" data-idx="${idx}" value="${Number(item.sale_price || 50000)}" style="width:92px;">
+            </div>
+          </td>
+          <td style="padding:0.6rem;text-align:center;">
+            <input type="number" min="1" step="1" class="stock-input scan-item-qty" data-idx="${idx}" value="${Number(item.quantity || 1)}" style="width:74px;text-align:center;font-weight:700;">
+          </td>
+          <td style="padding:0.6rem;text-align:right;">
+            <input type="number" min="0" step="100" class="stock-input scan-item-cost" data-idx="${idx}" value="${Number(item.unit_cost || 0)}" style="width:94px;text-align:right;">
+          </td>
+          <td style="padding:0.6rem;text-align:center;font-variant-numeric:tabular-nums;">
+            <span style="color:var(--muted);">${Number(item.current_stock || 0)}</span>
+            <span> → </span>
+            <strong class="scan-item-projected" data-idx="${idx}" style="color:var(--action);">${newStock}</strong>
+          </td>
+        </tr>
+      `;
+    })
+    .join('');
 
   attachScannedTableEvents();
+  updateScannedTotalBadge();
 }
 
 function attachScannedTableEvents() {
   const tbody = document.getElementById('scanned-items-tbody');
-  if (!tbody) return;
+  if (!tbody || !currentScannedData) return;
 
-  tbody.querySelectorAll('.item-product-select').forEach((sel) => {
+  tbody.querySelectorAll('.scan-item-check').forEach((chk) => {
+    chk.addEventListener('change', (e) => {
+      const idx = Number(e.target.dataset.idx);
+      if (currentScannedData.items[idx]) {
+        currentScannedData.items[idx].included = e.target.checked;
+        updateScannedTotalBadge();
+      }
+    });
+  });
+
+  tbody.querySelectorAll('.scan-item-select').forEach((sel) => {
     sel.addEventListener('change', (e) => {
-      const idx = parseInt(e.target.dataset.index, 10);
-      const prodId = e.target.value;
-      const prod = products.find((p) => p.id === prodId);
-      if (currentScannedData && currentScannedData.items[idx]) {
-        currentScannedData.items[idx].product_id = prodId || null;
-        currentScannedData.items[idx].product_name = prod ? prod.name : null;
+      const idx = Number(e.target.dataset.idx);
+      const val = e.target.value;
+      const item = currentScannedData.items[idx];
+      if (!item) return;
+
+      item.product_id = val;
+      const matched = products.find((p) => p.id === val);
+      item.current_stock = matched ? Number(matched.stock || 0) : 0;
+
+      const wrap = tbody.querySelector(`.scan-sale-price-wrap[data-idx="${idx}"]`);
+      if (wrap) {
+        const showPrice = val === '__new__';
+        wrap.hidden = !showPrice;
+        wrap.style.display = showPrice ? 'flex' : 'none';
       }
-      updateRowStockCalculation(idx);
+      renderScannedResults();
     });
   });
 
-  tbody.querySelectorAll('.item-qty-input').forEach((inp) => {
+  tbody.querySelectorAll('.scan-item-qty').forEach((inp) => {
     inp.addEventListener('input', (e) => {
-      const idx = parseInt(e.target.dataset.index, 10);
-      const qty = parseInt(e.target.value, 10) || 0;
-      if (currentScannedData && currentScannedData.items[idx]) {
-        currentScannedData.items[idx].quantity = qty;
-      }
-      updateRowStockCalculation(idx);
+      const idx = Number(e.target.dataset.idx);
+      const qty = Math.max(0, Number(e.target.value) || 0);
+      const item = currentScannedData.items[idx];
+      if (!item) return;
+      item.quantity = qty;
+      const projEl = tbody.querySelector(`.scan-item-projected[data-idx="${idx}"]`);
+      if (projEl) projEl.textContent = String(Number(item.current_stock || 0) + qty);
+      updateScannedTotalBadge();
     });
   });
 
-  tbody.querySelectorAll('.item-cost-input').forEach((inp) => {
+  tbody.querySelectorAll('.scan-item-cost').forEach((inp) => {
     inp.addEventListener('input', (e) => {
-      const idx = parseInt(e.target.dataset.index, 10);
-      const cost = parseFloat(e.target.value) || 0;
-      if (currentScannedData && currentScannedData.items[idx]) {
-        currentScannedData.items[idx].unit_cost = cost;
+      const idx = Number(e.target.dataset.idx);
+      if (currentScannedData.items[idx]) {
+        currentScannedData.items[idx].unit_cost = Math.max(0, Number(e.target.value) || 0);
       }
     });
   });
 
-  tbody.querySelectorAll('.btn-remove-scanned-item').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      const idx = parseInt(btn.dataset.index, 10);
-      if (currentScannedData && Array.isArray(currentScannedData.items)) {
-        currentScannedData.items.splice(idx, 1);
-        renderScannedResults(currentScannedData);
+  tbody.querySelectorAll('.scan-item-sale-price').forEach((inp) => {
+    inp.addEventListener('input', (e) => {
+      const idx = Number(e.target.dataset.idx);
+      if (currentScannedData.items[idx]) {
+        currentScannedData.items[idx].sale_price = Math.max(500, Number(e.target.value) || 0);
       }
     });
   });
-}
-
-function updateRowStockCalculation(idx) {
-  const tr = document.querySelector(`#scanned-items-tbody tr[data-index="${idx}"]`);
-  if (!tr) return;
-
-  const sel = tr.querySelector('.item-product-select');
-  const qtyInput = tr.querySelector('.item-qty-input');
-  const currentStockEl = tr.querySelector('.item-current-stock');
-  const newStockEl = tr.querySelector('.item-new-stock');
-
-  const prodId = sel.value;
-  const prod = products.find((p) => p.id === prodId);
-  const currentStock = prod ? Number(prod.stock || 0) : 0;
-  const qty = parseInt(qtyInput.value, 10) || 0;
-  const newStock = currentStock + qty;
-
-  currentStockEl.textContent = currentStock;
-  newStockEl.textContent = newStock;
 }
 
 async function applyScannedInvoiceToDatabase() {
   if (!currentScannedData || !Array.isArray(currentScannedData.items)) {
-    alert('No hay datos de factura para aplicar.');
+    alert('No hay factura analizada para ingresar.');
     return;
   }
 
-  const supplierName = document.getElementById('scanned-supplier-name')?.value.trim() || 'Distribuidor';
-  const invoiceNumber = document.getElementById('scanned-invoice-number')?.value.trim() || `FAC-${Date.now().toString().slice(-6)}`;
-  const invoiceDate = document.getElementById('scanned-invoice-date')?.value || new Date().toISOString().split('T')[0];
-
-  const validItems = currentScannedData.items.filter((item) => item.product_id && Number(item.quantity) > 0);
-
-  if (validItems.length === 0) {
-    alert('No hay ítems vinculados a productos del catálogo con cantidad mayor a 0. Asocie al menos un producto.');
-    return;
-  }
-
-  const confirmed = confirm(
-    `¿Confirmar ingreso de mercancía?\n\n` +
-      `Proveedor: ${supplierName}\n` +
-      `Factura: ${invoiceNumber}\n` +
-      `Ítems a ingresar: ${validItems.length}\n` +
-      `Total unidades: ${validItems.reduce((acc, it) => acc + Number(it.quantity), 0)}\n\n` +
-      `El inventario en Cloudflare D1 se actualizará de inmediato.`
+  const validItems = currentScannedData.items.filter(
+    (it) => it.included && Number(it.quantity) > 0 && (it.product_id || it.raw_name)
   );
+  if (validItems.length === 0) {
+    alert('Seleccione al menos un producto con cantidad mayor a cero.');
+    return;
+  }
 
+  const totalUnits = validItems.reduce((sum, it) => sum + Number(it.quantity), 0);
+  const confirmed = confirm(
+    `¿Confirmar causación e ingreso de mercancía?\n\n` +
+      `Proveedor: ${currentScannedData.supplier_name}\n` +
+      `Factura: ${currentScannedData.invoice_number}\n` +
+      `Ítems a ingresar: ${validItems.length} (${totalUnits} uds)\n\n` +
+      `Los productos nuevos y el proveedor se crearán automáticamente si aún no existen.`
+  );
   if (!confirmed) return;
 
-  const applyBtn = document.getElementById('btn-apply-invoice-stock');
+  const applyBtn = document.getElementById('apply-invoice-to-d1-btn');
   if (applyBtn) {
     applyBtn.disabled = true;
-    applyBtn.textContent = 'Actualizando D1 en vivo...';
+    applyBtn.textContent = '⏳ Causando en Cloudflare D1...';
   }
 
   try {
-    const token = localStorage.getItem('mucadele_admin_token') || sessionStorage.getItem('mucadele_admin_token');
     const resp = await fetch('/api/admin/apply-invoice', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
+      credentials: 'same-origin',
+      headers: getAuthHeaders(),
       body: JSON.stringify({
-        supplier_name: supplierName,
-        invoice_number: invoiceNumber,
-        invoice_date: invoiceDate,
+        supplier_name: currentScannedData.supplier_name,
+        invoice_number: currentScannedData.invoice_number,
+        invoice_date: currentScannedData.invoice_date,
         items: validItems,
       }),
     });
 
     const res = await resp.json();
     if (!resp.ok || !res.ok) {
-      throw new Error(res.error || 'Error al aplicar el inventario.');
+      throw new Error(res.error || 'Error aplicando la factura al inventario.');
     }
 
-    alert(`✓ Inventario actualizado exitosamente en Cloudflare D1.\n` +
-          `Factura registrada: ${res.po_number || invoiceNumber}\n` +
-          `Productos actualizados: ${res.updated_products_count}\n` +
-          `Total unidades sumadas: ${res.total_units_added}`);
-
     resetInvoiceScanner();
-    document.getElementById('invoice-scanner-section')?.classList.add('hidden');
-    await loadProducts();
-    await loadSuppliersAndPOs();
+    await Promise.all([loadProducts(), loadSuppliersAndPOs()]);
+    showToast(res.message || 'Factura causada e inventario actualizado en D1');
   } catch (err) {
-    console.error('Error aplicando factura:', err);
-    alert('Error al aplicar factura al inventario: ' + err.message);
+    alert('Error al causar factura: ' + err.message);
   } finally {
     if (applyBtn) {
       applyBtn.disabled = false;
-      applyBtn.textContent = '✓ Confirmar e Ingresar al Inventario Real';
+      applyBtn.textContent = '📥 Confirmar e Ingresar a Inventario Real (Cloudflare D1)';
     }
   }
 }
 
 function resetInvoiceScanner() {
   currentScannedData = null;
-  currentInvoiceBase64 = null;
-  currentInvoiceMime = null;
-
   const fileInput = document.getElementById('invoice-file-input');
+  const statusBox = document.getElementById('invoice-scan-status-box');
+  const resultsBox = document.getElementById('invoice-results-box');
+  const previewImg = document.getElementById('invoice-preview-img');
+  const previewPlaceholder = document.getElementById('invoice-preview-placeholder');
+
   if (fileInput) fileInput.value = '';
-
-  const previewContainer = document.getElementById('invoice-preview-container');
-  if (previewContainer) previewContainer.classList.add('hidden');
-
-  const fileInfo = document.getElementById('invoice-file-info');
-  if (fileInfo) fileInfo.textContent = '';
-
-  const resultsContainer = document.getElementById('invoice-results-container');
-  if (resultsContainer) resultsContainer.classList.add('hidden');
-
-  const processBtn = document.getElementById('btn-process-invoice-ai');
-  if (processBtn) processBtn.disabled = true;
+  if (statusBox) statusBox.hidden = true;
+  if (resultsBox) resultsBox.hidden = true;
+  if (previewImg) {
+    previewImg.src = '';
+    previewImg.hidden = true;
+  }
+  if (previewPlaceholder) previewPlaceholder.hidden = false;
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+function bootAdminExtensions() {
   initInvoiceScanner();
-  initDianModule();
-});
+  if (!dianModuleInitialized) {
+    dianModuleInitialized = true;
+    initDianModule();
+  }
+}
+
+document.addEventListener('DOMContentLoaded', bootAdminExtensions);
 if (document.readyState === 'complete' || document.readyState === 'interactive') {
-  initInvoiceScanner();
-  initDianModule();
+  bootAdminExtensions();
 }
 
 // ============================================================================
