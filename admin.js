@@ -538,7 +538,7 @@ function renderLowStockAlertsBox() {
   lowStockAlertsBox.innerHTML = Array.from(bySupplier.values())
     .map(
       (group) => `
-      <div style="background:#FFFBEB;border:1.5px solid #F59E0B;border-radius:12px;padding:1rem;margin-bottom:0.75rem;display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+      <div style="background:#FFFBEB;border:1.5px solid #F59E0B;border-radius:12px;padding:1rem;margin-bottom:0.75rem;display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;width:100%;box-sizing:border-box;">
         <div>
           <strong style="color:#92400E;font-size:0.98rem;">⚠️ Alerta de Stock Mínimo · Proveedor: ${escapeHTML(group.supplier_name)}</strong>
           <div style="font-size:0.86rem;color:#78350F;margin-top:0.25rem;">
@@ -630,7 +630,7 @@ function renderPurchaseOrders() {
       return `
         <div style="background:var(--bg);border:1.5px solid ${
           isPending ? 'var(--action)' : 'var(--border)'
-        };border-radius:12px;padding:0.9rem 1rem;display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+        };border-radius:12px;padding:0.9rem 1rem;display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;width:100%;box-sizing:border-box;">
           <div>
             <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
               <span class="status-pill ${isPending ? 'warn' : 'ok'}">
@@ -700,7 +700,7 @@ function renderSuppliersList() {
     .map((s) => {
       const assignedProducts = products.filter((p) => Number(p.supplier_id) === Number(s.id));
       return `
-        <div style="border:1px solid var(--border);border-radius:14px;padding:1rem;background:var(--bg);display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+        <div style="border:1px solid var(--border);border-radius:14px;padding:1rem;background:var(--bg);display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;width:100%;box-sizing:border-box;">
           <div>
             <strong style="font-size:1.02rem;">🏭 ${escapeHTML(s.name)}</strong>
             <div style="font-size:0.86rem;color:var(--muted);margin-top:0.25rem;">
@@ -855,7 +855,7 @@ function renderCarriersList() {
       (c) => `
       <div style="border:1.5px solid ${
         c.isDefault ? 'var(--action)' : 'var(--border)'
-      };border-radius:14px;padding:1rem;background:var(--bg);display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+      };border-radius:14px;padding:1rem;background:var(--bg);display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;width:100%;box-sizing:border-box;">
         <div>
           <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
             <strong style="font-size:1.05rem;">🏍️ ${escapeHTML(c.name)}</strong>
@@ -1065,8 +1065,8 @@ function renderAdminOrders() {
     const isPendingCredit = (o.payment_method || '').toLowerCase() === 'credito' && (o.payment_status || '').toLowerCase() === 'pending';
 
     return `
-      <div style="border:1px solid var(--border);border-radius:12px;padding:0.9rem;display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;background:${isPendingCredit ? '#FFFDFB' : 'var(--bg)'};">
-        <div style="flex:1;min-width:280px;">
+      <div style="border:1px solid var(--border);border-radius:12px;padding:0.9rem;display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;background:${isPendingCredit ? '#FFFDFB' : 'var(--bg)'};width:100%;box-sizing:border-box;">
+        <div style="flex:1 1 240px;min-width:0;max-width:100%;">
           <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;margin-bottom:0.35rem;">
             <span class="status-pill ${isLocal ? '' : 'ok'}" style="${
               isLocal ? 'background:#E5E5EA;color:#111;' : ''

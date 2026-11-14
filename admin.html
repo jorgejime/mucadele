@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/pos.css?v=20261113v2">
+  <link rel="stylesheet" href="/pos.css?v=20261114v3">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 <body>
@@ -195,7 +195,7 @@
           </div>
 
           <!-- Tabla de Productos a Ingresar -->
-          <div style="overflow-x:auto;">
+          <div class="admin-table-wrap">
             <table class="admin-table" style="width:100%;border-collapse:collapse;font-size:0.9rem;">
               <thead>
                 <tr style="background:var(--surface);text-align:left;">
@@ -387,7 +387,7 @@
       </div>
 
       <!-- KPIs de ventas por método en Panel Admin -->
-      <div class="kpi-row" style="margin-bottom:1rem;grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));">
+      <div class="kpi-row" style="margin-bottom:1rem;grid-template-columns: repeat(auto-fit, minmax(min(125px, 100%), 1fr));width:100%;max-width:100%;box-sizing:border-box;">
         <div class="kpi-card">
           <span>Facturación Total</span>
           <strong id="admin-kpi-total">$0</strong>
@@ -450,7 +450,7 @@
       <!-- Configuración y Credenciales DIAN -->
       <div class="admin-panel-callout" style="background:var(--surface,#FFFFFF);border:1px solid var(--border,#E5E7EB);border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">
         <h3 class="admin-section-subtitle" style="margin-top:0;margin-bottom:0.75rem;font-size:1.05rem;">⚙️ Parámetros Técnicos de Software Propio</h3>
-        <form id="dian-config-form" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:1rem;">
+        <form id="dian-config-form" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(min(220px, 100%), 1fr));gap:1rem;width:100%;max-width:100%;box-sizing:border-box;">
           <div class="admin-form-group">
             <label for="dian-env" class="admin-form-label">Ambiente DIAN</label>
             <select id="dian-env" class="admin-form-input">
@@ -696,6 +696,6 @@
       });
     });
   </script>
-  <script type="module" src="/admin.js?v=20261114v1"></script>
+  <script type="module" src="/admin.js?v=20261114v2"></script>
 </body>
 </html>
