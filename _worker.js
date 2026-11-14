@@ -1437,6 +1437,37 @@ async function handleAdminCustomers(request, env) {
 
     const customersMap = new Map();
 
+    // 1. Integrar directorio de clientes fiscales registrados en D1
+    const dbCustomersRes = await env.DB.prepare('SELECT * FROM customers').all();
+    for (const cust of dbCustomersRes.results || []) {
+      const cleanPhone = (cust.phone || '').replace(/\D/g, '');
+      const doc = String(cust.doc_number || '').trim();
+      const key = doc
+        ? `doc:${doc.toLowerCase()}`
+        : cleanPhone.length >= 7
+        ? `phone:${cleanPhone.slice(-10)}`
+        : `name:${(cust.name || '').toLowerCase()}`;
+
+      if (!customersMap.has(key)) {
+        customersMap.set(key, {
+          id: key,
+          name: cust.name,
+          phone: cust.phone || '',
+          cleanPhone: cleanPhone.slice(-10),
+          doc: doc,
+          address: cust.address || '',
+          total_orders: 0,
+          total_spent: 0,
+          total_debt: Number(cust.current_debt || 0),
+          pending_credits_count: Number(cust.current_debt || 0) > 0 ? 1 : 0,
+          first_order_date: cust.created_at,
+          last_order_date: cust.created_at,
+          orders: [],
+        });
+      }
+    }
+
+    // 2. Enriquecer con órdenes e histórico de compras
     for (const ord of orders) {
       const rawName = (ord.customer_name || 'Cliente Mostrador').trim();
       const rawPhone = (ord.customer_phone || '').trim();
