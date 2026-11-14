@@ -23,33 +23,33 @@ let catalogData = INITIAL_CATALOG.map((item) => ({ ...item, stock: item.stock ??
 // JSON-LD de catálogo en <head> para motores SEO / GEO / AIO
 const ldScript = document.createElement('script');
 ldScript.type = 'application/ld+json';
-ldScript.textContent = JSON.stringify({
-  '@context': 'https://schema.org',
-  '@type': 'ItemList',
-  name: 'Catálogo Mucadele Licores Santa Marta',
-  itemListElement: catalogData.map((item, idx) => ({
-    '@type': 'ListItem',
-    position: idx + 1,
-    item: {
-      '@type': 'Product',
-      sku: item.id,
-      name: item.name,
-      image: item.imageUrl,
-      offers: {
-        '@type': 'Offer',
-        priceCurrency: 'COP',
-        price: item.price,
-        availability: 'https://schema.org/InStock',
+function updateCatalogJsonLd() {
+  ldScript.textContent = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name: 'Catálogo Mucadele Licores Santa Marta',
+    itemListElement: catalogData.map((item, idx) => ({
+      '@type': 'ListItem',
+      position: idx + 1,
+      item: {
+        '@type': 'Product',
+        sku: item.id,
+        name: item.name,
+        image: item.imageUrl,
+        offers: {
+          '@type': 'Offer',
+          priceCurrency: 'COP',
+          price: item.price,
+          availability: 'https://schema.org/InStock',
+        },
       },
-    },
-  })),
-});
+    })),
+  });
+}
+updateCatalogJsonLd();
 document.head.appendChild(ldScript);
 
-let cart = [
-  { ...catalogData[0], quantity: 1 },
-  { ...catalogData[14], quantity: 1 },
-];
+let cart = [];
 let activeCategory = 'todos';
 let searchQuery = '';
 let orderMode = 'delivery'; // 'delivery' | 'pickup'
@@ -115,8 +115,9 @@ async function syncLiveCatalog() {
     const resp = await fetch('/api/catalog');
     if (!resp.ok) return;
     const data = await resp.json();
-    if (data.ok && Array.isArray(data.products) && data.products.length > 0) {
+    if (data.ok && Array.isArray(data.products)) {
       catalogData = data.products;
+      updateCatalogJsonLd();
       // Sincronizar precios y stock de productos que ya estén en el carrito
       cart = cart
         .map((cItem) => {
@@ -216,7 +217,7 @@ function renderCatalog() {
   });
 
   if (filtered.length === 0) {
-    productGrid.innerHTML = `<p style="grid-column:1/-1;color:var(--muted);text-align:center;padding:2rem 0;font-size:1.05rem;">Sin resultados.</p>`;
+    productGrid.innerHTML = `<p style="grid-column:1/-1;color:var(--muted);text-align:center;padding:2rem 0;font-size:1.05rem;">${catalogData.length === 0 ? 'Catálogo en actualización. Próximamente nuevos productos disponibles.' : 'Sin resultados.'}</p>`;
     return;
   }
 

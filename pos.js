@@ -320,6 +320,15 @@ function renderPOSCatalog() {
     return matchCat && matchQ;
   });
 
+  if (filtered.length === 0) {
+    posGrid.innerHTML = `<p style="grid-column:1/-1;color:var(--muted);text-align:center;padding:2.5rem 1rem;font-size:0.95rem;">${
+      catalogData.length === 0
+        ? 'No hay productos registrados en el inventario. Ingrese al Panel Admin para crear productos.'
+        : 'Sin resultados para esta búsqueda.'
+    }</p>`;
+    return;
+  }
+
   posGrid.innerHTML = filtered
     .map((item) => {
       const qty = getTicketQty(item.id);
@@ -1599,7 +1608,7 @@ async function syncPOSCatalogAndCarriers() {
     const resp = await fetch('/api/catalog');
     if (resp.ok) {
       const data = await resp.json();
-      if (data.ok && Array.isArray(data.products) && data.products.length > 0) {
+      if (data.ok && Array.isArray(data.products)) {
         catalogData = data.products;
         renderPOSCatalog();
         renderPOSTicket();
